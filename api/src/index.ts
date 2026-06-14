@@ -10,6 +10,7 @@ import { taskRoutes } from './routes/tasks'
 import { claimRoutes } from './routes/claims'
 import { walletRoutes } from './routes/wallet'
 import { cronHandler } from './routes/cron'
+import { youtubeVerifyRoutes } from './routes/youtube-verify'
 
 const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
 
@@ -39,6 +40,7 @@ app.route('/api/auth', authRoutes)
 app.route('/api/tasks', taskRoutes)
 app.route('/api/claims', claimRoutes)
 app.route('/api/wallet', walletRoutes)
+app.route('/api/youtube-verify', youtubeVerifyRoutes)
 
 // Cron trigger handler (CF Cron: every 6h)
 app.post('/__cron/xu-unlock', cronHandler)
