@@ -6,6 +6,7 @@ import { MyTasksPage } from './pages/MyTasksPage'
 import { WalletPage } from './pages/WalletPage'
 import { LoginPage } from './pages/LoginPage'
 import { VerifyResultPage } from './pages/VerifyResultPage'
+import { CreateTaskPage } from './pages/CreateTaskPage'
 
 const qc = new QueryClient({
   defaultOptions: {
@@ -27,7 +28,7 @@ export default function App() {
             <Route index element={<FeedPage />} />
             <Route path="/my-tasks" element={<MyTasksPage />} />
             <Route path="/wallet" element={<WalletPage />} />
-            <Route path="/create" element={<div className="card p-8 text-center" style={{ color: 'var(--color-muted)' }}>Tạo task — Phase 3</div>} />
+            <Route path="/create" element={<CreateTaskPage />} />
             <Route path="/profile" element={<div className="card p-8 text-center" style={{ color: 'var(--color-muted)' }}>Profile — Phase 5</div>} />
           </Route>
 

@@ -12,6 +12,8 @@
 | **CF Account** | dngtiennguyen600@gmail.com |
 | **CF Account ID** | `5428747acff6eee82f9d2fba7162ba22` |
 | **Worker name** | `yt-smm-exchange-api` |
+| **Worker URL** | `https://yt-smm-exchange-api.linkdev.workers.dev` |
+| **Pages URL** | `https://yt-smm-exchange.pages.dev` |
 | **D1 DB name** | `yt-smm-exchange-db` |
 | **KV namespace** | `RATE_KV` |
 | **Pages project** | `yt-smm-exchange-frontend` |

@@ -29,7 +29,7 @@
   // Env vars (secrets: set via `wrangler secret put KEY`)
   "vars": {
     "ENVIRONMENT": "development",
-    "APP_URL": "http://localhost:5173",
+    "APP_URL": "https://yt-smm-exchange.pages.dev",
     // YouTube Data API v3 key (public, for delta polling)
     // Secret: YOUTUBE_API_KEY → wrangler secret put YOUTUBE_API_KEY
     // Secret: GOOGLE_CLIENT_ID → wrangler secret put GOOGLE_CLIENT_ID
