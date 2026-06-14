@@ -14,7 +14,7 @@
     {
       "binding": "DB",
       "database_name": "yt-smm-exchange-db",
-      "database_id": "PLACEHOLDER_REPLACE_AFTER_CREATE"
+      "database_id": "0e577751-082b-435c-8d78-bd4532d79532"
     }
   ],
 
@@ -22,7 +22,7 @@
   "kv_namespaces": [
     {
       "binding": "RATE_KV",
-      "id": "PLACEHOLDER_REPLACE_AFTER_CREATE"
+      "id": "b77418255103414bb913efc706be6cc4"
     }
   ],
 
