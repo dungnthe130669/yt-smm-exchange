@@ -7,6 +7,8 @@ import { WalletPage } from './pages/WalletPage'
 import { LoginPage } from './pages/LoginPage'
 import { VerifyResultPage } from './pages/VerifyResultPage'
 import { CreateTaskPage } from './pages/CreateTaskPage'
+import { ProfilePage } from './pages/ProfilePage'
+import { AuthGuard } from './components/layout/AuthGuard'
 
 const qc = new QueryClient({
   defaultOptions: {
@@ -23,13 +25,13 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/verify-result" element={<VerifyResultPage />} />
 
-          {/* App shell */}
-          <Route element={<AppLayout />}>
+          {/* App shell — auth guarded */}
+          <Route element={<AuthGuard><AppLayout /></AuthGuard>}>
             <Route index element={<FeedPage />} />
             <Route path="/my-tasks" element={<MyTasksPage />} />
             <Route path="/wallet" element={<WalletPage />} />
             <Route path="/create" element={<CreateTaskPage />} />
-            <Route path="/profile" element={<div className="card p-8 text-center" style={{ color: 'var(--color-muted)' }}>Profile — Phase 5</div>} />
+            <Route path="/profile" element={<ProfilePage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
