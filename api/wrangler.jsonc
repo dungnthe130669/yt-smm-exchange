@@ -1,0 +1,45 @@
+{
+  // YT SMM Exchange — Hono API Worker
+  // Account: dngtiennguyen600@gmail.com (ID: 5428747acff6eee82f9d2fba7162ba22)
+  // Deploy: npx wrangler deploy
+  // Dev:    npx wrangler dev
+  "name": "yt-smm-exchange-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-01-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "account_id": "5428747acff6eee82f9d2fba7162ba22",
+
+  // D1 Database
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "yt-smm-exchange-db",
+      "database_id": "PLACEHOLDER_REPLACE_AFTER_CREATE"
+    }
+  ],
+
+  // KV: rate limiting + IP logs + xu unlock schedule
+  "kv_namespaces": [
+    {
+      "binding": "RATE_KV",
+      "id": "PLACEHOLDER_REPLACE_AFTER_CREATE"
+    }
+  ],
+
+  // Env vars (secrets: set via `wrangler secret put KEY`)
+  "vars": {
+    "ENVIRONMENT": "development",
+    "APP_URL": "http://localhost:5173",
+    // YouTube Data API v3 key (public, for delta polling)
+    // Secret: YOUTUBE_API_KEY → wrangler secret put YOUTUBE_API_KEY
+    // Secret: GOOGLE_CLIENT_ID → wrangler secret put GOOGLE_CLIENT_ID
+    // Secret: GOOGLE_CLIENT_SECRET → wrangler secret put GOOGLE_CLIENT_SECRET
+    // Secret: BETTER_AUTH_SECRET → wrangler secret put BETTER_AUTH_SECRET
+    "YOUTUBE_QUOTA_PROJECT": "yt-smm-exchange"
+  },
+
+  // Cron: churn detection + xu unlock (every 6 hours)
+  "triggers": {
+    "crons": ["0 */6 * * *"]
+  }
+}
