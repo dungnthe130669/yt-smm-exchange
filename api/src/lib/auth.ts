@@ -11,10 +11,7 @@ export function createAuth(env: Env) {
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.APP_URL,
 
-    database: {
-      type: 'sqlite',
-      db: wrapD1ForBetterAuth(env.DB),
-    },
+    database: env.DB,
 
     socialProviders: {
       google: {
@@ -24,32 +21,11 @@ export function createAuth(env: Env) {
       },
     },
 
-    trustedOrigins: [env.APP_URL],
+    trustedOrigins: [
+      env.APP_URL,
+      'https://yt-smm-exchange-api.linkdev.workers.dev',
+    ],
   })
 }
 
-// Wrap D1Database to the interface Better Auth's sqlite adapter expects
-function wrapD1ForBetterAuth(db: D1Database) {
-  return {
-    prepare(sql: string) {
-      return {
-        async all(...params: unknown[]) {
-          const flat = params.flat()
-          const stmt = flat.length ? db.prepare(sql).bind(...flat) : db.prepare(sql)
-          const result = await stmt.all()
-          return result.results
-        },
-        async run(...params: unknown[]) {
-          const flat = params.flat()
-          const stmt = flat.length ? db.prepare(sql).bind(...flat) : db.prepare(sql)
-          return stmt.run()
-        },
-        async get(...params: unknown[]) {
-          const flat = params.flat()
-          const stmt = flat.length ? db.prepare(sql).bind(...flat) : db.prepare(sql)
-          return stmt.first()
-        },
-      }
-    },
-  }
-}
+// D1 wrapper no longer needed — BA v1.6 accepts D1Database directly

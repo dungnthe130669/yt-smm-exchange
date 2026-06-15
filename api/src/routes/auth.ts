@@ -11,7 +11,21 @@ authRoutes.all('/*', async (c) => {
   const auth = createAuth(c.env)
 
   // After Google OAuth signup: ensure wallet exists
-  const res = await auth.handler(c.req.raw)
+  let res: Response
+  try {
+    res = await auth.handler(c.req.raw)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    return c.json({ error: 'AUTH_ERROR', message: msg }, 500)
+  }
+
+  // Debug: surface BA error body in dev
+  if (res.status >= 500) {
+    const clone = res.clone()
+    const text = await clone.text().catch(() => '(unreadable)')
+    console.error('[auth] BA error', res.status, text)
+    return c.json({ error: 'AUTH_ERROR', message: text || 'Better Auth 500', status: res.status }, 500)
+  }
 
   // Post-signin hook: create wallet if new user
   // Better Auth doesn't expose a reliable "new user" event in D1 adapter
