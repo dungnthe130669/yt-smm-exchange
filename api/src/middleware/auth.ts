@@ -1,8 +1,9 @@
 import type { Context, Next } from 'hono'
 import type { Env } from '../bindings'
 import type { HonoVariables } from '../types'
+import { createAuth } from '../lib/auth'
 
-// Injects authenticated user into context
+// Injects authenticated user into context via Better Auth session API
 // Does NOT block — routes guard themselves with requireAuth()
 export async function authMiddleware(
   c: Context<{ Bindings: Env; Variables: HonoVariables }>,
@@ -11,29 +12,23 @@ export async function authMiddleware(
   c.set('user', null)
   c.set('userId', null)
 
-  const sessionToken = getCookieToken(c) ?? getBearerToken(c)
-  if (!sessionToken) return next()
+  // Skip auth lookup for auth routes — BA handles its own sessions
+  if (c.req.path.startsWith('/api/auth')) return next()
 
   try {
-    const row = await c.env.DB.prepare(
-      `SELECT s.user_id, u.id, u.email, u.name, u.avatar, u.role, u.created_at
-       FROM ba_sessions s
-       JOIN users u ON u.id = s.user_id
-       WHERE s.token = ? AND s.expires_at > ?`
-    )
-      .bind(sessionToken, Math.floor(Date.now() / 1000))
-      .first<{ user_id: string; id: string; email: string; name: string; avatar: string | null; role: string; created_at: number }>()
+    const auth = createAuth(c.env)
+    const session = await auth.api.getSession({ headers: c.req.raw.headers })
 
-    if (row) {
+    if (session?.user) {
       c.set('user', {
-        id: row.id,
-        email: row.email,
-        name: row.name,
-        avatar: row.avatar,
-        role: row.role as 'user' | 'admin',
-        created_at: row.created_at,
+        id: session.user.id,
+        email: session.user.email,
+        name: session.user.name,
+        avatar: session.user.image ?? null,
+        role: 'user' as 'user' | 'admin',
+        created_at: session.user.createdAt ? new Date(session.user.createdAt).getTime() / 1000 : 0,
       })
-      c.set('userId', row.id)
+      c.set('userId', session.user.id)
     }
   } catch (e) {
     console.error('[auth] session lookup error', e)
@@ -47,15 +42,4 @@ export function requireAuth(c: Context<{ Bindings: Env; Variables: HonoVariables
   const user = c.get('user')
   if (!user) return c.json({ error: 'UNAUTHORIZED', message: 'Cần đăng nhập' }, 401)
   return null // null = ok, caller continues
-}
-
-function getCookieToken(c: Context): string | null {
-  const cookie = c.req.header('Cookie') ?? ''
-  const match = cookie.match(/better-auth\.session_token=([^;]+)/)
-  return match?.[1] ?? null
-}
-
-function getBearerToken(c: Context): string | null {
-  const auth = c.req.header('Authorization') ?? ''
-  return auth.startsWith('Bearer ') ? auth.slice(7) : null
 }
