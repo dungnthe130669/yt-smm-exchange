@@ -1,10 +1,17 @@
+import { useState } from 'react'
 import { YoutubeLogo } from '@phosphor-icons/react'
 import { FadeUp } from '../components/ui/Motion'
+import { signInWithGoogle } from '../lib/auth-client'
 
 export function LoginPage() {
-  const handleGoogleLogin = () => {
-    window.location.href = '/api/auth/sign-in/social?provider=google&callbackURL=/'
+  const [loading, setLoading] = useState(false)
+
+  const handleGoogleLogin = async () => {
+    setLoading(true)
+    await signInWithGoogle('/feed')
+    // signIn.social redirects browser — no need to reset loading
   }
+
 
   return (
     <div className="min-h-[100dvh] flex items-center justify-center px-4">
@@ -45,9 +52,10 @@ export function LoginPage() {
         {/* Login button */}
         <div className="w-full flex flex-col gap-3">
           <button
-            className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-md font-medium text-sm transition-opacity hover:opacity-90"
+            className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-md font-medium text-sm transition-opacity hover:opacity-90 disabled:opacity-60"
             style={{ background: '#fff', color: '#111' }}
             onClick={handleGoogleLogin}
+            disabled={loading}
           >
             {/* Google SVG icon */}
             <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
