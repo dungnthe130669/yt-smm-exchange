@@ -33,7 +33,7 @@ export function CreateTaskPage() {
   const [channelUrl, setChannelUrl] = useState('')
   const [channelName, setChannelName] = useState('')
   const [targetCount, setTargetCount] = useState(10)
-  const [pricePerUnit, setPricePerUnit] = useState(500)
+  const [pricePerUnit, setPricePerUnit] = useState(5)
   const [xuPerUnit, setXuPerUnit] = useState(14)
   const [deadlineDays, setDeadlineDays] = useState(7)
 
@@ -75,9 +75,9 @@ export function CreateTaskPage() {
   return (
     <div className="flex flex-col gap-6">
       <FadeUp>
-        <h1 className="display text-xl">Đặt task</h1>
+        <h1 className="display text-xl">Create Task</h1>
         <p className="text-sm mt-0.5" style={{ color: 'var(--color-muted)' }}>
-          Tạo task để nhận sub cho kênh YouTube của bạn.
+          Create a task to get subscribers for your YouTube channel.
         </p>
       </FadeUp>
 
@@ -94,7 +94,7 @@ export function CreateTaskPage() {
               border: mode === m ? '1px solid var(--color-border)' : '1px solid transparent',
             }}
           >
-            {m === 'PAY' ? 'Trả VND (thật)' : 'Trả xu (cross-sub)'}
+            {m === 'PAY' ? 'Pay USD (real)' : 'Pay Credits (cross-sub)'}
           </button>
         ))}
       </FadeUp>
@@ -110,8 +110,8 @@ export function CreateTaskPage() {
           <Info size={16} color={mode === 'PAY' ? 'var(--color-orange)' : 'var(--color-xu)'} style={{ flexShrink: 0, marginTop: 2 }} />
           <p style={{ color: 'var(--color-muted)' }}>
             {mode === 'PAY'
-              ? 'Task VND được ưu tiên hiển thị đầu feed. Earner nhận xu, bạn trả VND từ số dư ví.'
-              : 'Task xu dùng xu bạn đã kiếm được. Hiển thị sau task VND. Tối đa 50 sub/task.'
+              ? 'USD tasks appear first in the feed. Earners receive credits, you pay USD from your wallet.'
+              : 'Credit tasks use credits you have earned. Shown after USD tasks. Max 50 subs per task.'
             }
           </p>
         </div>
@@ -123,7 +123,7 @@ export function CreateTaskPage() {
 
           {/* Channel URL */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium">URL kênh YouTube</label>
+            <label className="text-sm font-medium">YouTube Channel URL</label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2">
                 <YoutubeLogo size={16} color="var(--color-sub)" weight="fill" />
@@ -137,16 +137,16 @@ export function CreateTaskPage() {
               />
             </div>
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-              Hỗ trợ: /channel/UC..., /@handle, /c/name
+              Supports: /channel/UC..., /@handle, /c/name
             </p>
           </div>
 
           {/* Channel name (optional display) */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium">Tên kênh (hiển thị)</label>
+            <label className="text-sm font-medium">Channel name (display)</label>
             <input
               className="input"
-              placeholder="Tên kênh của bạn"
+              placeholder="Your channel name"
               value={channelName}
               onChange={(e) => setChannelName(e.target.value)}
             />
@@ -155,9 +155,9 @@ export function CreateTaskPage() {
           {/* Target count */}
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium">
-              Số lượng sub cần
+              Subscribers needed
               <span className="text-xs ml-2" style={{ color: 'var(--color-muted)' }}>
-                (tối đa {mode === 'PAY' ? 1000 : 50})
+                (max {mode === 'PAY' ? 1000 : 50})
               </span>
             </label>
             <input
@@ -174,23 +174,23 @@ export function CreateTaskPage() {
           {/* Price */}
           {mode === 'PAY' ? (
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Giá mỗi sub (VND)</label>
+              <label className="text-sm font-medium">Price per sub (USD cents)</label>
               <input
                 type="number"
                 className="input"
-                min={100}
-                step={100}
+                min={1}
+                step={1}
                 value={pricePerUnit}
-                onChange={(e) => setPricePerUnit(parseInt(e.target.value) || 100)}
+                onChange={(e) => setPricePerUnit(parseInt(e.target.value) || 1)}
                 required
               />
               <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                Earner nhận xu tương đương. Minimum 100đ/sub.
+                Earner receives equivalent credits. Minimum $0.01/sub.
               </p>
             </div>
           ) : (
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Xu mỗi sub</label>
+              <label className="text-sm font-medium">Credits per sub</label>
               <input
                 type="number"
                 className="input"
@@ -200,14 +200,14 @@ export function CreateTaskPage() {
                 required
               />
               <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                Tối thiểu 14 xu/sub (platform giữ spread 4 xu).
+                Minimum 14 credits/sub (platform keeps 4 cr spread).
               </p>
             </div>
           )}
 
           {/* Deadline */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium">Thời hạn</label>
+            <label className="text-sm font-medium">Duration</label>
             <div className="grid grid-cols-4 gap-2">
               {[1, 3, 7, 14].map((d) => (
                 <button
@@ -221,7 +221,7 @@ export function CreateTaskPage() {
                     color: deadlineDays === d ? 'var(--color-text)' : 'var(--color-muted)',
                   }}
                 >
-                  {d}n
+                  {d}d
                 </button>
               ))}
             </div>
@@ -231,11 +231,11 @@ export function CreateTaskPage() {
           <div className="divider" />
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Tổng escrow</p>
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Total escrow</p>
               <p className="mono font-bold text-lg" style={{ color: mode === 'PAY' ? 'var(--color-orange)' : 'var(--color-xu)' }}>
-                {totalCost.toLocaleString('vi-VN')}
+                {totalCost.toLocaleString('en-US')}
                 <span className="text-sm font-normal ml-1" style={{ color: 'var(--color-muted)' }}>
-                  {mode === 'PAY' ? 'đ' : 'xu'}
+                  {mode === 'PAY' ? '¢ USD' : 'cr'}
                 </span>
               </p>
             </div>
@@ -244,13 +244,13 @@ export function CreateTaskPage() {
               className="btn-primary"
               disabled={mutation.isPending}
             >
-              {mutation.isPending ? 'Đang tạo...' : 'Tạo task'}
+              {mutation.isPending ? 'Creating...' : 'Create task'}
             </button>
           </div>
 
           {mutation.isError && (
             <p className="text-sm" style={{ color: 'var(--color-danger)' }}>
-              {(mutation.error as { message?: string })?.message ?? 'Lỗi tạo task.'}
+              {(mutation.error as { message?: string })?.message ?? 'Failed to create task.'}
             </p>
           )}
         </form>

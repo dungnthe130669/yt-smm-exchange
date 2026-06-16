@@ -50,13 +50,13 @@ export function FeedPage() {
         <div>
           <h1 className="display text-xl">Task Feed</h1>
           <p className="text-sm mt-0.5" style={{ color: 'var(--color-muted)' }}>
-            Sub kênh, nhận xu. Xu dùng mua sub cho kênh của bạn.
+            Subscribe to channels, earn credits. Use credits to grow your own channel.
           </p>
         </div>
         <button
           className="btn-ghost p-2"
           onClick={() => refetch()}
-          title="Làm mới"
+          title="Refresh"
         >
           <ArrowClockwise size={16} />
         </button>
@@ -75,11 +75,11 @@ export function FeedPage() {
               color: filter === f ? 'var(--color-text)' : 'var(--color-muted)',
             }}
           >
-            {f === 'ALL' ? 'Tất cả' : f === 'PAY' ? 'Trả VND' : 'Trả xu'}
+            {f === 'ALL' ? 'All' : f === 'PAY' ? 'Pay USD' : 'Pay Credits'}
           </button>
         ))}
         <span className="flex items-center gap-1 text-xs ml-auto" style={{ color: 'var(--color-muted)' }}>
-          <Funnel size={12} /> {tasks.length} task
+          <Funnel size={12} /> {tasks.length} tasks
         </span>
       </FadeUp>
 
@@ -94,8 +94,8 @@ export function FeedPage() {
 
       {error && (
         <FadeUp className="card p-6 text-center">
-          <p style={{ color: 'var(--color-muted)' }}>Lỗi tải feed. Thử lại nhé.</p>
-          <button className="btn-ghost mt-3 mx-auto" onClick={() => refetch()}>Thử lại</button>
+          <p style={{ color: 'var(--color-muted)' }}>Failed to load feed. Please try again.</p>
+          <button className="btn-ghost mt-3 mx-auto" onClick={() => refetch()}>Retry</button>
         </FadeUp>
       )}
 
@@ -107,9 +107,9 @@ export function FeedPage() {
           >
             <Funnel size={24} color="var(--color-muted)" />
           </div>
-          <p className="font-medium">Không có task nào</p>
+          <p className="font-medium">No tasks available</p>
           <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-            Quay lại sau hoặc đổi filter khác.
+            Check back later or change your filter.
           </p>
         </FadeUp>
       )}
@@ -130,7 +130,7 @@ export function FeedPage() {
       {claimMutation.isSuccess && (
         <FadeUp className="card p-4 border-[var(--color-success)]" style={{ borderColor: 'var(--color-success)' }}>
           <p className="text-sm font-medium" style={{ color: 'var(--color-success)' }}>
-            Nhận task thành công. Vào "Nhiệm vụ" để theo dõi và submit.
+            Task claimed! Go to "Tasks" to track and submit.
           </p>
         </FadeUp>
       )}
@@ -138,7 +138,7 @@ export function FeedPage() {
       {claimMutation.isError && (
         <FadeUp className="card p-4" style={{ borderColor: 'var(--color-danger)' }}>
           <p className="text-sm" style={{ color: 'var(--color-danger)' }}>
-            {(claimMutation.error as { message?: string })?.message ?? 'Không thể nhận task.'}
+            {(claimMutation.error as { message?: string })?.message ?? 'Failed to claim task.'}
           </p>
         </FadeUp>
       )}

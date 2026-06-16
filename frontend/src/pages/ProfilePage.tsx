@@ -30,7 +30,7 @@ export function ProfilePage() {
   return (
     <div className="flex flex-col gap-6">
       <FadeUp>
-        <h1 className="display text-xl">Tài khoản</h1>
+        <h1 className="display text-xl">Account</h1>
       </FadeUp>
 
       <FadeUp delay={0.05} className="card p-6 flex items-center gap-4">
@@ -61,18 +61,18 @@ export function ProfilePage() {
           onClick={handleSignOut}
         >
           <SignOut size={16} />
-          Đăng xuất
+          Sign out
         </button>
       </FadeUp>
 
       <FadeUp delay={0.1} className="card p-4">
         <p className="text-xs font-medium mb-2" style={{ color: 'var(--color-muted)' }}>
-          Thông tin tài khoản
+          Account info
         </p>
         <div className="flex flex-col gap-2">
           {[
             { label: 'ID', value: user?.id?.slice(0, 8) + '...' },
-            { label: 'Vai trò', value: user?.role ?? 'user' },
+            { label: 'Role', value: user?.role ?? 'user' },
           ].map(({ label, value }) => (
             <div key={label} className="flex justify-between text-sm">
               <span style={{ color: 'var(--color-muted)' }}>{label}</span>

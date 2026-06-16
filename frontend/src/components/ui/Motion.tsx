@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 // Animate a number counting up from 0 to value
 export function CountUp({ value, className }: { value: number; className?: string }) {
   const count = useMotionValue(0)
-  const rounded = useTransform(count, (v) => Math.round(v).toLocaleString('vi-VN'))
+  const rounded = useTransform(count, (v) => Math.round(v).toLocaleString('en-US'))
 
   useEffect(() => {
     const ctrl = animate(count, value, { duration: 0.8, ease: 'easeOut' })

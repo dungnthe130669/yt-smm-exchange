@@ -4,15 +4,15 @@ import { FadeUp } from '../components/ui/Motion'
 import { Link } from 'react-router-dom'
 
 const RESULT: Record<string, { icon: typeof CheckCircle; color: string; title: string; body: string }> = {
-  success:          { icon: CheckCircle,    color: 'var(--color-success)', title: 'Verify thành công!',        body: 'Xu đã được khóa, sẽ unlock sau 48h nếu bạn không unsub.' },
-  not_subscribed:   { icon: XCircle,        color: 'var(--color-danger)',  title: 'Chưa sub kênh',             body: 'Hệ thống không tìm thấy sub từ tài khoản của bạn. Thử lại.' },
-  rejected:         { icon: XCircle,        color: 'var(--color-danger)',  title: 'Claim bị từ chối',           body: 'Quá 2 lần verify thất bại. Task này đã bị hủy.' },
-  duplicate_channel:{ icon: XCircle,        color: 'var(--color-danger)',  title: 'Kênh đã dùng rồi',          body: 'YouTube channel này đã verify task này trước đó.' },
-  no_channel:       { icon: XCircle,        color: 'var(--color-danger)',  title: 'Không tìm thấy kênh YouTube',body: 'Tài khoản Google này chưa có YouTube channel.' },
-  token_error:      { icon: XCircle,        color: 'var(--color-danger)',  title: 'Lỗi xác thực Google',       body: 'Không lấy được token. Thử verify lại.' },
-  expired:          { icon: HourglassHigh,  color: 'var(--color-orange)',  title: 'Phiên đã hết hạn',          body: 'Quá 10 phút. Quay lại và thử submit lại.' },
-  cancelled:        { icon: HourglassHigh,  color: 'var(--color-muted)',   title: 'Đã hủy',                    body: 'Bạn đã hủy xác thực Google OAuth.' },
-  error:            { icon: XCircle,        color: 'var(--color-danger)',  title: 'Lỗi hệ thống',              body: 'Có lỗi xảy ra. Thử lại sau ít phút.' },
+  success:          { icon: CheckCircle,    color: 'var(--color-success)', title: 'Verified!',              body: 'Credits locked. They will unlock after 48h if you stay subscribed.' },
+  not_subscribed:   { icon: XCircle,        color: 'var(--color-danger)',  title: 'Not subscribed',          body: 'We could not find a subscription from your account. Please try again.' },
+  rejected:         { icon: XCircle,        color: 'var(--color-danger)',  title: 'Claim rejected',          body: 'Failed verify twice. This task has been cancelled.' },
+  duplicate_channel:{ icon: XCircle,        color: 'var(--color-danger)',  title: 'Channel already used',    body: 'This YouTube channel has already verified this task.' },
+  no_channel:       { icon: XCircle,        color: 'var(--color-danger)',  title: 'No YouTube channel found',body: 'This Google account has no YouTube channel.' },
+  token_error:      { icon: XCircle,        color: 'var(--color-danger)',  title: 'Google auth error',       body: 'Could not get token. Please try again.' },
+  expired:          { icon: HourglassHigh,  color: 'var(--color-orange)',  title: 'Session expired',         body: 'Over 10 minutes elapsed. Go back and try submitting again.' },
+  cancelled:        { icon: HourglassHigh,  color: 'var(--color-muted)',   title: 'Cancelled',               body: 'You cancelled Google OAuth.' },
+  error:            { icon: XCircle,        color: 'var(--color-danger)',  title: 'System error',            body: 'Something went wrong. Please try again in a moment.' },
 }
 
 export function VerifyResultPage() {
@@ -43,15 +43,15 @@ export function VerifyResultPage() {
             style={{ borderColor: 'var(--color-xu)' }}
           >
             <span className="mono font-bold text-xl" style={{ color: 'var(--color-xu)' }}>+{xu}</span>
-            <span className="text-sm" style={{ color: 'var(--color-muted)' }}>xu đang khóa (unlock sau 48h)</span>
+            <span className="text-sm" style={{ color: 'var(--color-muted)' }}>credits locked (unlock after 48h)</span>
           </div>
         )}
 
         <Link to="/my-tasks" className="btn-primary w-full justify-center mt-2">
-          Xem nhiệm vụ
+          View my tasks
         </Link>
         <Link to="/" className="btn-ghost w-full justify-center" style={{ textDecoration: 'none' }}>
-          Về Feed
+          Back to Feed
         </Link>
       </FadeUp>
     </div>

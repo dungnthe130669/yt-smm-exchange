@@ -5,25 +5,25 @@ import type { TaskClaim } from '../types'
 import { FadeUp, StaggerList, StaggerItem } from '../components/ui/Motion'
 
 const XU_STATUS_LABEL: Record<string, { label: string; color: string }> = {
-  NONE:         { label: 'Chờ verify',    color: 'var(--color-muted)' },
-  LOCKED:       { label: 'Xu đang khóa', color: 'var(--color-orange)' },
-  CREDITED:     { label: 'Xu đã nhận',   color: 'var(--color-success)' },
-  CLAWED_BACK:  { label: 'Xu bị thu hồi',color: 'var(--color-danger)' },
+  NONE:         { label: 'Pending verify',      color: 'var(--color-muted)' },
+  LOCKED:       { label: 'Credits locked',      color: 'var(--color-orange)' },
+  CREDITED:     { label: 'Credits earned',      color: 'var(--color-success)' },
+  CLAWED_BACK:  { label: 'Credits clawed back', color: 'var(--color-danger)' },
 }
 
 const CLAIM_STATUS_LABEL: Record<string, string> = {
-  CLAIMED:   'Chờ sub',
-  SUBMITTED: 'Đang verify',
-  VERIFIED:  'Xác nhận xong',
-  REJECTED:  'Bị từ chối',
-  EXPIRED:   'Hết hạn',
+  CLAIMED:   'Pending sub',
+  SUBMITTED: 'Verifying',
+  VERIFIED:  'Verified',
+  REJECTED:  'Rejected',
+  EXPIRED:   'Expired',
 }
 
 function countdownLabel(mustSubmitAfter: number) {
   const diff = mustSubmitAfter * 1000 - Date.now()
   if (diff <= 0) return null
   const m = Math.ceil(diff / 60000)
-  return `Chờ thêm ${m} phút`
+  return `Wait ${m} more min`
 }
 
 export function MyTasksPage() {
@@ -59,9 +59,9 @@ export function MyTasksPage() {
   return (
     <div className="flex flex-col gap-6">
       <FadeUp>
-        <h1 className="display text-xl">Nhiệm vụ của tôi</h1>
+        <h1 className="display text-xl">My Tasks</h1>
         <p className="text-sm mt-0.5" style={{ color: 'var(--color-muted)' }}>
-          Theo dõi task đã nhận, submit để nhận xu.
+          Track your claimed tasks, submit to earn credits.
         </p>
       </FadeUp>
 
@@ -69,7 +69,7 @@ export function MyTasksPage() {
       {active.length > 0 && (
         <section className="flex flex-col gap-3">
           <p className="text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>
-            Đang thực hiện ({active.length})
+            In Progress ({active.length})
           </p>
           <StaggerList className="flex flex-col gap-3">
             {active.map((claim) => {
@@ -90,7 +90,7 @@ export function MyTasksPage() {
                           className="text-xs flex items-center gap-1"
                           style={{ color: 'var(--color-link)' }}
                         >
-                          Mở YouTube <ArrowSquareOut size={11} />
+                          Open YouTube <ArrowSquareOut size={11} />
                         </a>
                       </div>
                       <span className="badge badge-muted flex-shrink-0">
@@ -100,30 +100,30 @@ export function MyTasksPage() {
 
                     {/* Reward */}
                     <div className="flex items-center gap-2 text-sm">
-                      <span style={{ color: 'var(--color-muted)' }}>Phần thưởng:</span>
+                      <span style={{ color: 'var(--color-muted)' }}>Reward:</span>
                       <span className="mono font-medium" style={{ color: 'var(--color-xu)' }}>
-                        {claim.xu_per_unit ?? claim.xu_amount} xu
+                        {claim.xu_per_unit ?? claim.xu_amount} cr
                       </span>
-                      <span className="text-xs" style={{ color: 'var(--color-muted)' }}>(khóa 48h sau verify)</span>
+                      <span className="text-xs" style={{ color: 'var(--color-muted)' }}>(locked 48h after verify)</span>
                     </div>
 
                     {/* Timer or submit */}
                     {waiting
                       ? <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--color-orange)' }}>
                           <Clock size={14} />
-                          {waiting} rồi mới submit được
+                          {waiting} remaining before submit
                         </div>
                       : canSubmit
                         ? <div className="flex items-center gap-3">
                             <p className="text-xs flex-1" style={{ color: 'var(--color-muted)' }}>
-                              Đã sub kênh chưa? Nhấn verify để xác nhận qua Google OAuth.
+                              Already subscribed? Click verify to confirm via Google OAuth.
                             </p>
                             <button
                               className="btn-primary text-xs py-1.5 px-3 flex-shrink-0"
                               onClick={() => submitMutation.mutate(claim.id)}
                               disabled={submitMutation.isPending}
                             >
-                              {submitMutation.isPending ? 'Đang xử lý...' : 'Verify sub'}
+                              {submitMutation.isPending ? 'Processing...' : 'Verify sub'}
                             </button>
                           </div>
                         : null
@@ -140,7 +140,7 @@ export function MyTasksPage() {
       {done.length > 0 && (
         <section className="flex flex-col gap-3">
           <p className="text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>
-            Lịch sử ({done.length})
+            History ({done.length})
           </p>
           <StaggerList className="flex flex-col gap-2">
             {done.map((claim) => {
@@ -157,7 +157,7 @@ export function MyTasksPage() {
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">
                       <span className="mono text-sm" style={{ color: 'var(--color-xu)' }}>
-                        {claim.xu_amount} xu
+                        {claim.xu_amount} cr
                       </span>
                       <span className="text-xs" style={{ color: xuInfo.color }}>
                         {xuInfo.label}
@@ -179,9 +179,9 @@ export function MyTasksPage() {
           >
             <Clock size={24} color="var(--color-muted)" />
           </div>
-          <p className="font-medium">Chưa có nhiệm vụ nào</p>
+          <p className="font-medium">No tasks yet</p>
           <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-            Vào Feed nhận task để bắt đầu kiếm xu.
+            Head to the Feed to claim tasks and start earning credits.
           </p>
         </FadeUp>
       )}

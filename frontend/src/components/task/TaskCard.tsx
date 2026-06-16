@@ -4,10 +4,10 @@ import { StaggerItem } from '../ui/Motion'
 
 function timeLeft(deadline: number) {
   const diff = deadline * 1000 - Date.now()
-  if (diff <= 0) return 'Hết hạn'
+  if (diff <= 0) return 'Expired'
   const d = Math.floor(diff / 86400000)
   const h = Math.floor((diff % 86400000) / 3600000)
-  if (d > 0) return `${d}n ${h}h`
+  if (d > 0) return `${d}d ${h}h`
   return `${h}h`
 }
 
@@ -69,7 +69,7 @@ export function TaskCard({ task, onClaim, claimed }: TaskCardProps) {
           {/* Type badge */}
           <span className={`badge flex-shrink-0 ${isPay ? 'badge-orange' : 'badge-xu'}`}>
             {isPay
-              ? <><CurrencyCircleDollar size={11} weight="fill" /> VND</>
+              ? <><CurrencyCircleDollar size={11} weight="fill" /> USD</>
               : <><span className="mono">✦</span> Xu</>
             }
           </span>
@@ -78,7 +78,7 @@ export function TaskCard({ task, onClaim, claimed }: TaskCardProps) {
         {/* Reward */}
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Phần thưởng</p>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Reward</p>
             {isPay
               ? <p className="mono font-medium" style={{ color: 'var(--color-xu)' }}>
                   {task.xu_per_unit} <span className="text-xs" style={{ color: 'var(--color-muted)' }}>xu/sub</span>
@@ -89,7 +89,7 @@ export function TaskCard({ task, onClaim, claimed }: TaskCardProps) {
             }
           </div>
           <div className="text-right">
-            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Còn lại</p>
+            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Remaining</p>
             <p className="mono font-medium text-sm">
               {task.target_count - task.delivered_count}
               <span className="text-xs" style={{ color: 'var(--color-muted)' }}>/{task.target_count}</span>
@@ -117,17 +117,17 @@ export function TaskCard({ task, onClaim, claimed }: TaskCardProps) {
 
           {claimed
             ? <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--color-success)' }}>
-                <CheckCircle size={13} weight="fill" /> Đã nhận
+                <CheckCircle size={13} weight="fill" /> Claimed
               </span>
             : task.status === 'OPEN'
               ? <button
                   className="btn-primary text-xs py-1.5 px-3"
                   onClick={() => onClaim?.(task.id)}
                 >
-                  Nhận task
+                  Claim
                 </button>
               : <span className="badge badge-muted">
-                  <XCircle size={11} /> Đã đủ
+                  <XCircle size={11} /> Full
                 </span>
           }
         </div>

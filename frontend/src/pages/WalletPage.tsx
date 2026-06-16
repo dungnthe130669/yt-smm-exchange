@@ -6,18 +6,18 @@ import { WalletBar } from '../components/wallet/WalletBar'
 import { FadeUp, StaggerList, StaggerItem } from '../components/ui/Motion'
 
 const TXN_LABEL: Record<string, { label: string; sign: '+' | '-' | '~'; color: string }> = {
-  EARN:            { label: 'Nhận xu',      sign: '+', color: 'var(--color-success)' },
-  SPEND:           { label: 'Dùng xu',      sign: '-', color: 'var(--color-danger)'  },
-  BUY_XU:         { label: 'Mua xu',       sign: '+', color: 'var(--color-xu)'      },
-  BUY_VND:        { label: 'Nạp VND',      sign: '+', color: 'var(--color-success)' },
-  CLAW_BACK:      { label: 'Thu hồi xu',   sign: '-', color: 'var(--color-danger)'  },
-  REFUND:         { label: 'Hoàn tiền',    sign: '+', color: 'var(--color-success)' },
-  ESCROW_LOCK:    { label: 'Khóa escrow',  sign: '-', color: 'var(--color-muted)'   },
-  ESCROW_RELEASE: { label: 'Giải phóng',   sign: '+', color: 'var(--color-muted)'   },
+  EARN:            { label: 'Earn credits', sign: '+', color: 'var(--color-success)' },
+  SPEND:           { label: 'Spend credits',sign: '-', color: 'var(--color-danger)'  },
+  BUY_XU:         { label: 'Buy credits',  sign: '+', color: 'var(--color-xu)'      },
+  BUY_VND:        { label: 'Deposit USD',  sign: '+', color: 'var(--color-success)' },
+  CLAW_BACK:      { label: 'Claw back',    sign: '-', color: 'var(--color-danger)'  },
+  REFUND:         { label: 'Refund',       sign: '+', color: 'var(--color-success)' },
+  ESCROW_LOCK:    { label: 'Escrow lock',  sign: '-', color: 'var(--color-muted)'   },
+  ESCROW_RELEASE: { label: 'Release',      sign: '+', color: 'var(--color-muted)'   },
 }
 
 function formatDate(ts: number) {
-  return new Date(ts * 1000).toLocaleDateString('vi-VN', {
+  return new Date(ts * 1000).toLocaleDateString('en-US', {
     day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
   })
 }
@@ -34,9 +34,9 @@ export function WalletPage() {
   return (
     <div className="flex flex-col gap-6">
       <FadeUp>
-        <h1 className="display text-xl">Ví của tôi</h1>
+        <h1 className="display text-xl">My Wallet</h1>
         <p className="text-sm mt-0.5" style={{ color: 'var(--color-muted)' }}>
-          Số dư xu, VND và lịch sử giao dịch.
+          Credits, USD balance and transaction history.
         </p>
       </FadeUp>
 
@@ -46,14 +46,14 @@ export function WalletPage() {
       {/* Quick actions */}
       <FadeUp delay={0.08} className="grid grid-cols-3 gap-3">
         {[
-          { icon: ArrowDown, label: 'Nạp VND', color: 'var(--color-success)' },
-          { icon: Coins,     label: 'Mua xu',  color: 'var(--color-xu)' },
-          { icon: ArrowUp,   label: 'Rút tiền',color: 'var(--color-muted)' },
+          { icon: ArrowDown, label: 'Deposit USD',  color: 'var(--color-success)' },
+          { icon: Coins,     label: 'Buy Credits',  color: 'var(--color-xu)' },
+          { icon: ArrowUp,   label: 'Withdraw',     color: 'var(--color-muted)' },
         ].map(({ icon: Icon, label, color }) => (
           <button
             key={label}
             className="card p-4 flex flex-col items-center gap-2 text-center hover:border-[var(--color-border-hover)] transition-colors cursor-not-allowed opacity-60"
-            title="Sắp ra mắt"
+            title="Coming soon"
           >
             <div
               className="w-9 h-9 rounded-full flex items-center justify-center"
@@ -62,7 +62,7 @@ export function WalletPage() {
               <Icon size={18} color={color} weight="fill" />
             </div>
             <span className="text-xs font-medium">{label}</span>
-            <span className="text-xs" style={{ color: 'var(--color-subtle)' }}>Sắp ra mắt</span>
+            <span className="text-xs" style={{ color: 'var(--color-subtle)' }}>Coming soon</span>
           </button>
         ))}
       </FadeUp>
@@ -71,14 +71,14 @@ export function WalletPage() {
       <section className="flex flex-col gap-3">
         <FadeUp delay={0.1} className="flex items-center justify-between">
           <p className="text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>
-            Lịch sử giao dịch
+            Transaction history
           </p>
           <ArrowsLeftRight size={14} color="var(--color-muted)" />
         </FadeUp>
 
         {txns.length === 0 && (
           <FadeUp className="card p-8 text-center">
-            <p className="text-sm" style={{ color: 'var(--color-muted)' }}>Chưa có giao dịch nào.</p>
+            <p className="text-sm" style={{ color: 'var(--color-muted)' }}>No transactions yet.</p>
           </FadeUp>
         )}
 
@@ -100,7 +100,7 @@ export function WalletPage() {
                   </div>
                   <div className="text-right flex-shrink-0 ml-4">
                     <p className="mono font-medium text-sm" style={{ color: meta.color }}>
-                      {meta.sign}{txn.amount.toLocaleString('vi-VN')}
+                      {meta.sign}{txn.amount.toLocaleString('en-US')}
                     </p>
                     <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{txn.currency}</p>
                   </div>

@@ -30,7 +30,7 @@ export function LoginPage() {
               YT<span style={{ color: 'var(--color-orange)' }}>Exchange</span>
             </h1>
             <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
-              Sub chéo. Kiếm xu. Mua sub thật.
+              Earn credits. Buy real subscribers.
             </p>
           </div>
         </div>
@@ -38,9 +38,9 @@ export function LoginPage() {
         {/* How it works — 3 steps */}
         <div className="w-full flex flex-col gap-2">
           {[
-            { num: '01', text: 'Sub kênh YouTube trong feed', color: 'var(--color-sub)' },
-            { num: '02', text: 'Verify qua Google OAuth, nhận xu', color: 'var(--color-xu)' },
-            { num: '03', text: 'Dùng xu đặt sub cho kênh của bạn', color: 'var(--color-success)' },
+            { num: '01', text: 'Subscribe to YouTube channels in the feed', color: 'var(--color-sub)' },
+            { num: '02', text: 'Verify via Google OAuth, earn credits', color: 'var(--color-xu)' },
+            { num: '03', text: 'Use credits to buy subs for your channel', color: 'var(--color-success)' },
           ].map(({ num, text, color }) => (
             <div key={num} className="flex items-center gap-3 p-3 rounded-md" style={{ background: 'var(--color-surface)' }}>
               <span className="mono font-bold text-xs flex-shrink-0" style={{ color }}>{num}</span>
@@ -64,11 +64,11 @@ export function LoginPage() {
               <path d="M3.964 10.707A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.707V4.961H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.039l3.007-2.332z" fill="#FBBC05"/>
               <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.961L3.964 7.293C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
             </svg>
-            Tiếp tục với Google
+            Continue with Google
           </button>
 
           <p className="text-center text-xs" style={{ color: 'var(--color-subtle)' }}>
-            Bằng cách đăng nhập, bạn đồng ý với điều khoản sử dụng của nền tảng.
+            By signing in, you agree to our Terms of Service.
           </p>
         </div>
       </FadeUp>

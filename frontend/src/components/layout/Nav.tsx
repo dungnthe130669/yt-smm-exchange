@@ -5,10 +5,10 @@ import {
 
 const NAV = [
   { to: '/',        icon: House,       label: 'Feed' },
-  { to: '/my-tasks', icon: ListBullets, label: 'Nhiệm vụ' },
-  { to: '/wallet',  icon: Wallet,      label: 'Ví' },
-  { to: '/create',  icon: YoutubeLogo, label: 'Đặt task' },
-  { to: '/profile', icon: User,        label: 'Tài khoản' },
+  { to: '/my-tasks', icon: ListBullets, label: 'Tasks' },
+  { to: '/wallet',  icon: Wallet,      label: 'Wallet' },
+  { to: '/create',  icon: YoutubeLogo, label: 'Create' },
+  { to: '/profile', icon: User,        label: 'Profile' },
 ]
 
 // Desktop sidebar
