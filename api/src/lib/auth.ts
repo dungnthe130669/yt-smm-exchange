@@ -25,6 +25,13 @@ export function createAuth(env: Env) {
       env.APP_URL,
       'https://yt-smm-exchange-api.linkdev.workers.dev',
     ],
+
+    advanced: {
+      trustedProxyHeaders: true,
+      crossSubDomainCookies: {
+        enabled: false,
+      },
+    },
   })
 }
 

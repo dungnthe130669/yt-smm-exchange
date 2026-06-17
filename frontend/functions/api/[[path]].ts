@@ -5,14 +5,18 @@ export async function onRequest(context: { request: Request }): Promise<Response
   const url = new URL(context.request.url)
   const workerUrl = 'https://yt-smm-exchange-api.linkdev.workers.dev'
 
-  // Rewrite path: /api/tasks/feed → /api/tasks/feed (same path)
   const target = `${workerUrl}${url.pathname}${url.search}`
+
+  // Forward all headers + inject original host so BA cookie validation passes
+  const headers = new Headers(context.request.headers)
+  headers.set('x-forwarded-host', url.host)
+  headers.set('x-forwarded-proto', 'https')
 
   const req = new Request(target, {
     method: context.request.method,
-    headers: context.request.headers,
+    headers,
     body: ['GET', 'HEAD'].includes(context.request.method) ? null : context.request.body,
-    redirect: 'manual', // IMPORTANT: don't follow redirects — let browser handle them
+    redirect: 'manual',
   })
 
   const res = await fetch(req)
