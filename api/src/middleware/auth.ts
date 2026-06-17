@@ -20,6 +20,9 @@ export async function authMiddleware(
     const session = await auth.api.getSession({ headers: c.req.raw.headers })
 
     if (session?.user) {
+      const uid = session.user.id
+      // Auto-create wallet if not exists (idempotent)
+      await c.env.DB.prepare(`INSERT OR IGNORE INTO wallets (user_id) VALUES (?)`).bind(uid).run().catch(() => {})
       c.set('user', {
         id: session.user.id,
         email: session.user.email,

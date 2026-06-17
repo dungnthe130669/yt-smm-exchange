@@ -24,7 +24,7 @@ taskRoutes.get('/feed', async (c) => {
 
   const typeClause = type ? `AND t.task_type = ?` : ''
   const cursorClause = cursor ? `AND t.created_at < ?` : ''
-  const params: (string | number)[] = [userId, userId]
+  const params: (string | number)[] = [userId, userId, userId]
   if (type) params.push(type)
   if (cursor) params.push(parseInt(cursor))
   params.push(20) // limit
@@ -88,6 +88,9 @@ taskRoutes.post('/', async (c) => {
   if (body.deadline_days < 1 || body.deadline_days > 30) {
     return c.json({ error: 'INVALID_DEADLINE', message: 'Deadline phải từ 1–30 ngày' }, 400)
   }
+
+  // Auto-create wallet if missing (e.g. email signup)
+  await c.env.DB.prepare(`INSERT OR IGNORE INTO wallets (user_id) VALUES (?)`).bind(userId).run()
 
   const wallet = await c.env.DB.prepare(`SELECT * FROM wallets WHERE user_id = ?`)
     .bind(userId)

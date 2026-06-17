@@ -30,13 +30,20 @@ authRoutes.all('/*', async (c) => {
   // Post-signin hook: create wallet if new user
   // Better Auth doesn't expose a reliable "new user" event in D1 adapter
   // So we upsert wallet on every sign-in (idempotent)
-  if (c.req.path.includes('/callback/')) {
+  if (c.req.path.includes('/callback/') || c.req.path.includes('/sign-up/')) {
     try {
+      // Try to get session (works for OAuth callback)
       const session = await auth.api.getSession({ headers: c.req.raw.headers })
       if (session?.user?.id) {
-        await c.env.DB.prepare(`
-          INSERT OR IGNORE INTO wallets (user_id) VALUES (?)
-        `).bind(session.user.id).run()
+        await c.env.DB.prepare(`INSERT OR IGNORE INTO wallets (user_id) VALUES (?)`).bind(session.user.id).run()
+      } else {
+        // For sign-up: parse response body to get user id
+        const clone = res.clone()
+        const body = await clone.json().catch(() => null) as { user?: { id?: string } } | null
+        const userId = body?.user?.id
+        if (userId) {
+          await c.env.DB.prepare(`INSERT OR IGNORE INTO wallets (user_id) VALUES (?)`).bind(userId).run()
+        }
       }
     } catch { /* non-blocking */ }
   }

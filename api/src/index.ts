@@ -54,7 +54,7 @@ app.notFound((c) => c.json({ error: 'NOT_FOUND', message: 'Route không tồn t�
 // Error fallback
 app.onError((err, c) => {
   console.error('[ERROR]', err.message, err.stack)
-  return c.json({ error: 'INTERNAL_ERROR', message: 'Lỗi server' }, 500)
+  return c.json({ error: 'INTERNAL_ERROR', message: err.message ?? 'Server error', stack: err.stack?.split('\n').slice(0,3) }, 500)
 })
 
 export default {
