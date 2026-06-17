@@ -2,14 +2,48 @@ import { useState } from 'react'
 import { YoutubeLogo } from '@phosphor-icons/react'
 import { FadeUp } from '../components/ui/Motion'
 import { signInWithGoogle } from '../lib/auth-client'
+import { authClient } from '../lib/auth-client'
 
 export function LoginPage() {
   const [loading, setLoading] = useState(false)
+
+  // Dev email/password form state
+  const [devOpen, setDevOpen] = useState(false)
+  const [devEmail, setDevEmail] = useState('')
+  const [devPassword, setDevPassword] = useState('')
+  const [devError, setDevError] = useState<string | null>(null)
+  const [devLoading, setDevLoading] = useState(false)
 
   const handleGoogleLogin = async () => {
     setLoading(true)
     await signInWithGoogle('/feed')
     // signIn.social redirects browser — no need to reset loading
+  }
+
+  const handleDevSignIn = async () => {
+    setDevError(null)
+    setDevLoading(true)
+    try {
+      const res = await authClient.signIn.email({ email: devEmail, password: devPassword, callbackURL: '/feed' })
+      if (res?.error) setDevError(res.error.message ?? 'Sign in failed')
+    } catch (e: any) {
+      setDevError(e?.message ?? 'Sign in failed')
+    } finally {
+      setDevLoading(false)
+    }
+  }
+
+  const handleDevSignUp = async () => {
+    setDevError(null)
+    setDevLoading(true)
+    try {
+      const res = await authClient.signUp.email({ email: devEmail, password: devPassword, name: devEmail, callbackURL: '/feed' })
+      if (res?.error) setDevError(res.error.message ?? 'Sign up failed')
+    } catch (e: any) {
+      setDevError(e?.message ?? 'Sign up failed')
+    } finally {
+      setDevLoading(false)
+    }
   }
 
 
@@ -70,6 +104,116 @@ export function LoginPage() {
           <p className="text-center text-xs" style={{ color: 'var(--color-subtle)' }}>
             By signing in, you agree to our Terms of Service.
           </p>
+
+          {/* Dev: email/password login */}
+          <div style={{ marginTop: '8px' }}>
+            <button
+              onClick={() => setDevOpen(o => !o)}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'var(--color-muted)',
+                fontSize: '11px',
+                textDecoration: 'underline',
+                padding: '0',
+              }}
+            >
+              Dev: email/password login
+            </button>
+
+            {devOpen && (
+              <div
+                style={{
+                  marginTop: '8px',
+                  padding: '12px',
+                  borderRadius: '6px',
+                  border: '1px solid var(--color-border)',
+                  background: 'var(--color-surface)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                }}
+              >
+                <p style={{ margin: 0, fontSize: '10px', color: 'var(--color-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Dev only — not for production
+                </p>
+                <input
+                  type="email"
+                  placeholder="Email"
+                  value={devEmail}
+                  onChange={e => setDevEmail(e.target.value)}
+                  style={{
+                    padding: '8px 10px',
+                    borderRadius: '4px',
+                    border: '1px solid var(--color-border)',
+                    background: 'transparent',
+                    color: 'var(--color-text)',
+                    fontSize: '13px',
+                    outline: 'none',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                  }}
+                />
+                <input
+                  type="password"
+                  placeholder="Password"
+                  value={devPassword}
+                  onChange={e => setDevPassword(e.target.value)}
+                  style={{
+                    padding: '8px 10px',
+                    borderRadius: '4px',
+                    border: '1px solid var(--color-border)',
+                    background: 'transparent',
+                    color: 'var(--color-text)',
+                    fontSize: '13px',
+                    outline: 'none',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                  }}
+                />
+                {devError && (
+                  <p style={{ margin: 0, fontSize: '12px', color: 'var(--color-danger)' }}>{devError}</p>
+                )}
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={handleDevSignIn}
+                    disabled={devLoading}
+                    style={{
+                      flex: 1,
+                      padding: '7px',
+                      borderRadius: '4px',
+                      border: '1px solid var(--color-border)',
+                      background: 'var(--color-surface)',
+                      color: 'var(--color-text)',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      opacity: devLoading ? 0.6 : 1,
+                    }}
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    onClick={handleDevSignUp}
+                    disabled={devLoading}
+                    style={{
+                      flex: 1,
+                      padding: '7px',
+                      borderRadius: '4px',
+                      border: '1px solid var(--color-border)',
+                      background: 'var(--color-surface)',
+                      color: 'var(--color-muted)',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      opacity: devLoading ? 0.6 : 1,
+                    }}
+                  >
+                    Sign Up
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </FadeUp>
     </div>

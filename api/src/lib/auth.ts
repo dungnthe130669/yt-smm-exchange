@@ -13,6 +13,8 @@ export function createAuth(env: Env) {
 
     database: env.DB,
 
+    emailAndPassword: { enabled: true },
+
     socialProviders: {
       google: {
         clientId: env.GOOGLE_CLIENT_ID,
