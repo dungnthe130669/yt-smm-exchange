@@ -34,7 +34,8 @@ youtubeVerifyRoutes.post('/:claimId', async (c) => {
 
   // 2. Load claim — must be SUBMITTED and owned by user
   const claim = await c.env.DB.prepare(`
-    SELECT tc.*, t.channel_id, t.coin_per_unit, t.id as task_id
+    SELECT tc.id, tc.task_id, tc.claimer_id, tc.youtube_channel_id, tc.verify_attempts,
+           t.channel_id, t.coin_per_unit, t.id as task_id
     FROM task_claims tc
     JOIN tasks t ON t.id = tc.task_id
     WHERE tc.id = ? AND tc.claimer_id = ? AND tc.status = 'SUBMITTED'
@@ -144,7 +145,8 @@ youtubeVerifyRoutes.post('/:claimId/subscribe-and-verify', async (c) => {
 
   // 2. Load claim (must be CLAIMED or SUBMITTED)
   const claim = await c.env.DB.prepare(`
-    SELECT tc.*, t.channel_id as target_channel_id, t.coin_per_unit, t.id as task_id
+    SELECT tc.id, tc.task_id, tc.claimer_id, tc.youtube_channel_id, tc.verify_attempts, tc.status,
+           t.channel_id as target_channel_id, t.coin_per_unit, t.id as task_id
     FROM task_claims tc
     JOIN tasks t ON t.id = tc.task_id
     WHERE tc.id = ? AND tc.claimer_id = ? AND tc.status IN ('CLAIMED','SUBMITTED')
@@ -235,7 +237,8 @@ youtubeVerifyRoutes.post('/:claimId/perform', async (c) => {
 
   // 2. Load claim + task (must be CLAIMED or SUBMITTED)
   const claim = await c.env.DB.prepare(`
-    SELECT tc.*, t.channel_id as target_channel_id, t.video_id, t.comment_template,
+    SELECT tc.id, tc.task_id, tc.claimer_id, tc.youtube_channel_id, tc.verify_attempts, tc.status,
+           t.channel_id as target_channel_id, t.video_id, t.comment_template,
            t.coin_per_unit, t.id as task_id, t.action_type
     FROM task_claims tc
     JOIN tasks t ON t.id = tc.task_id
