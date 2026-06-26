@@ -90,7 +90,7 @@ export function TaskCard({ task, onClaim, claimed, claimDisabled }: TaskCardProp
           <div>
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Reward</p>
             <p className="mono font-medium" style={{ color: 'var(--color-xu)' }}>
-              {task.xu_per_unit} <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{actionLabel()}</span>
+              {task.coin_per_unit} <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{actionLabel()}</span>
             </p>
           </div>
           <div className="text-right">

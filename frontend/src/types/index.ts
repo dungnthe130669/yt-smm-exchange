@@ -3,7 +3,7 @@
 export type TaskType = 'PAY' | 'CROSS_SUB'
 export type TaskStatus = 'OPEN' | 'FILLING' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED'
 export type ClaimStatus = 'CLAIMED' | 'SUBMITTED' | 'VERIFIED' | 'REJECTED' | 'EXPIRED'
-export type XuStatus = 'NONE' | 'PENDING' | 'LOCKED' | 'CREDITED' | 'CLAWED_BACK'
+export type CoinStatus = 'NONE' | 'PENDING' | 'LOCKED' | 'CREDITED' | 'CLAWED_BACK'
 
 export interface User {
   id: string
@@ -15,9 +15,9 @@ export interface User {
 
 export interface Wallet {
   user_id: string
-  balance_vnd: number
-  xu_balance: number
-  xu_pending: number
+  balance_usd_micro: number
+  coin_balance: number
+  coin_pending: number
 }
 
 export interface Task {
@@ -30,8 +30,8 @@ export interface Task {
   target_count: number
   delivered_count: number
   task_type: TaskType
-  price_per_unit_vnd: number
-  xu_per_unit: number
+  price_per_unit_usd_micro: number
+  coin_per_unit: number
   status: TaskStatus
   deadline: number
   created_at: number
@@ -40,6 +40,8 @@ export interface Task {
   video_title?: string
   video_thumbnail?: string
   comment_template?: string
+  escrow_usd_micro?: number
+  escrow_coin?: number
 }
 
 export interface TaskClaim {
@@ -50,15 +52,16 @@ export interface TaskClaim {
   submitted_at?: number
   verified_at?: number
   youtube_channel_id?: string
-  xu_status: XuStatus
-  xu_amount: number
+  coin_status: CoinStatus
+  coin_amount: number
   status: ClaimStatus
+  coin_locked_at?: number
   // joined from task
   channel_id?: string
   channel_url?: string
   channel_name?: string
   task_type?: TaskType
-  xu_per_unit?: number
+  coin_per_unit?: number
 }
 
 export interface WalletTxn {
@@ -66,11 +69,13 @@ export interface WalletTxn {
   user_id: string
   type: string
   amount: number
-  currency: 'VND' | 'XU'
+  currency: 'USD' | 'COIN'
   ref_id?: string
   note?: string
   created_at: number
 }
+
+export type TxnType = 'EARN' | 'SPEND' | 'BUY_COIN' | 'BUY_USD' | 'CLAW_BACK' | 'REFUND' | 'ESCROW_LOCK' | 'ESCROW_RELEASE'
 
 export interface ApiError {
   error: string

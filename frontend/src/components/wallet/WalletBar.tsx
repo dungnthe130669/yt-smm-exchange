@@ -1,4 +1,4 @@
-import { Coins, TrendUp, Clock } from '@phosphor-icons/react'
+import { Coins, Clock } from '@phosphor-icons/react'
 import type { Wallet } from '../../types'
 import { CountUp, FadeUp } from '../ui/Motion'
 
@@ -21,7 +21,7 @@ export function WalletBar({ wallet }: WalletBarProps) {
         <div>
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Coins</p>
           <p className="mono font-medium text-sm" style={{ color: 'var(--color-xu)' }}>
-            <CountUp value={wallet.xu_balance} />
+            <CountUp value={wallet.coin_balance} />
             <span className="text-xs ml-0.5" style={{ color: 'var(--color-muted)' }}>coin</span>
           </p>
         </div>
@@ -40,27 +40,8 @@ export function WalletBar({ wallet }: WalletBarProps) {
         <div>
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Pending</p>
           <p className="mono font-medium text-sm" style={{ color: 'var(--color-orange)' }}>
-            <CountUp value={wallet.xu_pending} />
+            <CountUp value={wallet.coin_pending} />
             <span className="text-xs ml-0.5" style={{ color: 'var(--color-muted)' }}>coin</span>
-          </p>
-        </div>
-      </div>
-
-      <div className="w-px h-8 flex-shrink-0" style={{ background: 'var(--color-border)' }} />
-
-      {/* USD balance */}
-      <div className="flex items-center gap-2 flex-shrink-0">
-        <div
-          className="w-8 h-8 rounded-full flex items-center justify-center"
-          style={{ background: 'rgb(34 197 94 / 0.1)' }}
-        >
-          <TrendUp size={16} color="var(--color-success)" weight="bold" />
-        </div>
-        <div>
-          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>USD Balance</p>
-          <p className="mono font-medium text-sm" style={{ color: 'var(--color-success)' }}>
-            <CountUp value={wallet.balance_vnd} />
-            <span className="text-xs ml-0.5" style={{ color: 'var(--color-muted)' }}>$</span>
           </p>
         </div>
       </div>

@@ -32,8 +32,8 @@ const CLAIM_STATUS_COLOR: Record<string, string> = {
 interface EarningRow {
   id: string
   action_type?: string
-  xu_amount: number
-  xu_status: string
+  coin_amount: number
+  coin_status: string
   status: string
   claimed_at: number
 }
@@ -85,7 +85,7 @@ export function MyTasksPage() {
           </p>
           <StaggerList className="flex flex-col gap-1.5">
             {earnings.map(row => {
-              const coinStatus = COIN_STATUS[row.xu_status] ?? COIN_STATUS['NONE']!
+              const coinStatus = COIN_STATUS[row.coin_status] ?? COIN_STATUS['NONE']!
               const date = new Date(row.claimed_at * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
               const isVerified = row.status === 'VERIFIED'
               return (
@@ -99,7 +99,7 @@ export function MyTasksPage() {
                     </span>
                     {isVerified ? (
                       <span className="mono text-sm font-bold" style={{ color: 'var(--color-xu)' }}>
-                        +{row.xu_amount}
+                        +{row.coin_amount}
                       </span>
                     ) : (
                       <span className="text-sm" style={{ color: CLAIM_STATUS_COLOR[row.status] ?? 'var(--color-muted)' }}>
