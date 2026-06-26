@@ -35,6 +35,11 @@ export interface Task {
   status: TaskStatus
   deadline: number
   created_at: number
+  action_type?: string
+  video_id?: string
+  video_title?: string
+  video_thumbnail?: string
+  comment_template?: string
 }
 
 export interface TaskClaim {

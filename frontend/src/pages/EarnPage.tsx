@@ -65,7 +65,7 @@ export function EarnPage() {
     if (showChannelPicker && channels.length > 0 && !selectedChannelId) {
       setSelectedChannelId(channels[0].channel_id)
     }
-  }, [showChannelPicker])
+  }, [showChannelPicker, channels, selectedChannelId])
 
   const getActionType = () => task?.action_type ?? 'SUBSCRIBE'
 
@@ -297,7 +297,7 @@ export function EarnPage() {
                 style={{ width: `${Math.min(100, (task.delivered_count / task.target_count) * 100)}%`, background: 'var(--color-orange)' }}
               />
             </div>
-            <span>{task.task_type === 'PAY' ? '$ USD' : '⊙ Coins'}</span>
+            <span>{task.delivered_count} / {task.target_count}</span>
           </div>
         </FadeUp>
       )}

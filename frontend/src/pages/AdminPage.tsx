@@ -394,17 +394,12 @@ function ClaimsTab() {
 // ─── Pricing Tab ──────────────────────────────────────────────────────────────
 
 const PRICING_FIELDS = [
-  { key: 'pay_price_per_unit_vnd', label: 'Subscribe PAY price (USD/sub)' },
-  { key: 'xu_per_unit_pay',        label: 'Subscribe coin reward for PAY task' },
-  { key: 'xu_per_unit_cross',      label: 'Cross-sub price (coin/sub)' },
-  { key: 'cooldown_seconds',       label: 'Cooldown between claim and verify (seconds)' },
-  { key: 'task_cooldown_seconds',  label: 'Cooldown between tasks (seconds, default 30)' },
-  { key: 'xu_per_subscribe',       label: 'Coin reward — Subscribe' },
-  { key: 'xu_per_like',            label: 'Coin reward — Like' },
-  { key: 'xu_per_comment',         label: 'Coin reward — Comment' },
-  { key: 'pay_per_subscribe_vnd',  label: 'PAY price — Subscribe (USD)' },
-  { key: 'pay_per_like_vnd',       label: 'PAY price — Like (USD)' },
-  { key: 'pay_per_comment_vnd',    label: 'PAY price — Comment (USD)' },
+  { key: 'xu_per_subscribe',     label: 'Coin reward — Subscribe' },
+  { key: 'xu_per_like',          label: 'Coin reward — Like' },
+  { key: 'xu_per_comment',       label: 'Coin reward — Comment' },
+  { key: 'xu_per_unit_cross',    label: 'Coin reward — Cross-sub (legacy)' },
+  { key: 'cooldown_seconds',     label: 'Per-task cooldown (seconds)' },
+  { key: 'task_cooldown_seconds', label: 'Between-task cooldown (seconds)' },
 ] as const
 
 type PricingKey = typeof PRICING_FIELDS[number]['key']

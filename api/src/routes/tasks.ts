@@ -55,7 +55,13 @@ taskRoutes.get('/feed', async (c) => {
 // GET /api/tasks/pricing — public pricing config
 taskRoutes.get('/pricing', async (c) => {
   const raw = await c.env.RATE_KV.get('pricing_config')
-  const config = raw ? JSON.parse(raw) : { pay_price_per_unit_vnd: 5, xu_per_unit_pay: 10, xu_per_unit_cross: 14 }
+  const defaults = {
+    xu_per_subscribe: 10,
+    xu_per_like: 5,
+    xu_per_comment: 15,
+    xu_per_unit_cross: 14,
+  }
+  const config = raw ? { ...defaults, ...JSON.parse(raw) } : defaults
   return c.json(config)
 })
 
@@ -126,7 +132,6 @@ taskRoutes.post('/', async (c) => {
     channel_name?: string
     channel_avatar?: string
     target_count: number
-    task_type: 'PAY' | 'CROSS_SUB'
     deadline_days: number
     action_type?: 'SUBSCRIBE' | 'LIKE' | 'COMMENT'
     video_id?: string
@@ -155,8 +160,8 @@ taskRoutes.post('/', async (c) => {
   const channelId = actionType === 'SUBSCRIBE' ? body.channel_id! : (body.video_id!)
   const channelUrl = actionType === 'SUBSCRIBE' ? body.channel_url! : `https://youtube.com/watch?v=${body.video_id}`
 
-  if (body.target_count < 1 || body.target_count > (body.task_type === 'CROSS_SUB' ? 50 : 1000)) {
-    return c.json({ error: 'INVALID_COUNT', message: 'Invalid target count' }, 400)
+  if (!Number.isFinite(body.target_count) || body.target_count < 1 || body.target_count > 50) {
+    return c.json({ error: 'INVALID_COUNT', message: 'Invalid target count (must be 1–50)' }, 400)
   }
   if (![3, 7, 14].includes(body.deadline_days)) {
     return c.json({ error: 'INVALID_DEADLINE', message: 'Duration must be 3, 7, or 14 days' }, 400)
@@ -167,68 +172,52 @@ taskRoutes.post('/', async (c) => {
   const pricing = pricingRaw ? JSON.parse(pricingRaw) : {}
   const defaultPricing = {
     xu_per_subscribe: 10, xu_per_like: 5, xu_per_comment: 15,
-    pay_per_subscribe_vnd: 5, pay_per_like_vnd: 3, pay_per_comment_vnd: 8,
+    xu_per_unit_cross: 14, // legacy fallback
   }
   const p = { ...defaultPricing, ...pricing }
 
-  const xuPerUnit = body.task_type === 'PAY'
-    ? (actionType === 'SUBSCRIBE' ? p.xu_per_subscribe : actionType === 'LIKE' ? p.xu_per_like : p.xu_per_comment)
-    : (pricing.xu_per_unit_cross ?? 14)
-  const pricePerUnitVnd = body.task_type === 'PAY'
-    ? (actionType === 'SUBSCRIBE' ? p.pay_per_subscribe_vnd : actionType === 'LIKE' ? p.pay_per_like_vnd : p.pay_per_comment_vnd)
-    : 0
+  const xuPerUnit = actionType === 'SUBSCRIBE' ? p.xu_per_subscribe
+    : actionType === 'LIKE' ? p.xu_per_like
+    : p.xu_per_comment
 
-  // Auto-create wallet if missing (e.g. email signup)
-  await c.env.DB.prepare(`INSERT OR IGNORE INTO wallets (user_id) VALUES (?)`).bind(userId).run()
+  // Always coin escrow (CROSS_SUB logic)
+  const escrowXu = xuPerUnit * Math.floor(body.target_count)
 
-  const wallet = await c.env.DB.prepare(`SELECT * FROM wallets WHERE user_id = ?`)
-    .bind(userId)
-    .first<{ balance_vnd: number; xu_balance: number }>()
+  // Atomic debit: UPDATE only succeeds if balance is sufficient
+  const debitResult = await c.env.DB.prepare(`
+    UPDATE wallets SET xu_balance = xu_balance - ?
+    WHERE user_id = ? AND xu_balance >= ?
+  `).bind(escrowXu, userId, escrowXu).run()
 
-  if (!wallet) return c.json({ error: 'WALLET_NOT_FOUND', message: 'Wallet not found' }, 404)
-
-  // Escrow check
-  const escrowVnd = body.task_type === 'PAY' ? pricePerUnitVnd * body.target_count : 0
-  const escrowXu = body.task_type === 'CROSS_SUB' ? xuPerUnit * body.target_count : 0
-
-  if (body.task_type === 'PAY' && wallet.balance_vnd < escrowVnd) {
-    return c.json({ error: 'INSUFFICIENT_VND', message: 'Insufficient USD balance' }, 400)
+  if (debitResult.meta.changes === 0) {
+    // Either wallet doesn't exist or insufficient balance
+    const wallet = await c.env.DB.prepare(`SELECT xu_balance FROM wallets WHERE user_id = ?`)
+      .bind(userId).first<{ xu_balance: number }>()
+    const bal = wallet?.xu_balance ?? 0
+    return c.json({ error: 'INSUFFICIENT_COINS', message: `Insufficient coin balance. You have ${bal} coins, need ${escrowXu}.` }, 400)
   }
- if (body.task_type === 'CROSS_SUB' && wallet.xu_balance < escrowXu) {
-    return c.json({ error: 'INSUFFICIENT_XU', message: 'Insufficient coin balance' }, 400)
- }
 
   const taskId = crypto.randomUUID()
   const deadline = Math.floor(Date.now() / 1000) + body.deadline_days * 86400
-  const priority = body.task_type === 'PAY' ? 1 : 2
 
   await c.env.DB.batch([
     c.env.DB.prepare(`
       INSERT INTO tasks (id, buyer_id, channel_id, channel_url, channel_name, channel_avatar,
         target_count, task_type, price_per_unit_vnd, xu_per_unit,
-        escrow_vnd, escrow_xu, priority, deadline,
+        escrow_vnd, escrow_xu, max_providers, priority, deadline,
         action_type, video_id, video_title, video_thumbnail, comment_template)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `).bind(taskId, userId, channelId, channelUrl, body.channel_name ?? null,
         body.channel_avatar ?? null,
-        body.target_count, body.task_type, pricePerUnitVnd, xuPerUnit,
-        escrowVnd, escrowXu, priority, deadline,
+        Math.floor(body.target_count), 'CROSS_SUB', 0, xuPerUnit,
+        0, escrowXu, 50, 1, deadline,
         actionType, body.video_id ?? null, body.video_title ?? null,
         body.video_thumbnail ?? null, body.comment_template ?? null),
 
-    // Lock escrow
-    body.task_type === 'PAY'
-      ? c.env.DB.prepare(`UPDATE wallets SET balance_vnd = balance_vnd - ? WHERE user_id = ?`).bind(escrowVnd, userId)
-      : c.env.DB.prepare(`UPDATE wallets SET xu_balance = xu_balance - ? WHERE user_id = ?`).bind(escrowXu, userId),
-
-    // Audit log
     c.env.DB.prepare(`
       INSERT INTO wallet_txns (id, user_id, type, amount, currency, ref_id, note)
       VALUES (?,?,?,?,?,?,?)
-    `).bind(crypto.randomUUID(), userId, 'ESCROW_LOCK',
-        body.task_type === 'PAY' ? escrowVnd : escrowXu,
-        body.task_type === 'PAY' ? 'VND' : 'XU',
-        taskId, 'Escrow lock on task creation'),
+    `).bind(crypto.randomUUID(), userId, 'ESCROW_LOCK', escrowXu, 'XU', taskId, 'Coin escrow for task creation'),
   ])
 
   return c.json({ task_id: taskId }, 201)
