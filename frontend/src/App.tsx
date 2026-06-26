@@ -34,6 +34,7 @@ export default function App() {
             <Route path="/create" element={<CreateTaskPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/admin" element={<AdminPage />} />
+            <Route path="/admin/:tab" element={<AdminPage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

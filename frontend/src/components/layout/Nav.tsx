@@ -65,7 +65,7 @@ export function Sidebar() {
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 flex flex-col gap-0.5">
         {nav.map(({ to, icon: Icon, label }) => {
-          const active = pathname === to
+          const active = to === '/' ? pathname === '/' : pathname === to || pathname.startsWith(to + '/')
           return (
             <Link
               key={to}
@@ -123,7 +123,7 @@ export function BottomNav() {
       style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
     >
       {nav.map(({ to, icon: Icon, label }) => {
-        const active = pathname === to
+        const active = to === '/' ? pathname === '/' : pathname === to || pathname.startsWith(to + '/')
         return (
           <Link
             key={to}

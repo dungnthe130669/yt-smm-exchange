@@ -156,9 +156,9 @@ adminRoutes.get('/pricing', async (c) => {
   if (guard) return guard
   const raw = await c.env.RATE_KV.get('pricing_config')
   const defaults = {
-    xu_per_subscribe: 10,
-    xu_per_like: 5,
-    xu_per_comment: 15,
+    coin_per_subscribe: 10,
+    coin_per_like: 5,
+    coin_per_comment: 15,
     cooldown_seconds: 0,
     task_cooldown_seconds: 30,
   }
@@ -172,9 +172,9 @@ adminRoutes.put('/pricing', async (c) => {
   if (guard) return guard
   const body = await c.req.json<Record<string, unknown>>()
   const defaults = {
-    xu_per_subscribe: 10,
-    xu_per_like: 5,
-    xu_per_comment: 15,
+    coin_per_subscribe: 10,
+    coin_per_like: 5,
+    coin_per_comment: 15,
     cooldown_seconds: 0,
     task_cooldown_seconds: 30,
   }

@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useParams, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { FadeUp } from '../components/ui/Motion'
-import { Users, ListBullets, ChartBar, ShieldCheck, CurrencyDollar, UsersThree, PencilSimple, Trash } from '@phosphor-icons/react'
+import {
+  Users, ListBullets, ChartBar, ShieldCheck, CurrencyDollar,
+  UsersThree, PencilSimple, Trash,
+} from '@phosphor-icons/react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -23,19 +26,52 @@ interface AdminUser {
 
 interface AdminTask {
   id: string; channel_name: string | null; channel_id: string
-  action_type: string; task_type: string; status: string; target_count: number; delivered_count: number
-  buyer_email: string; created_at: number; price_per_unit_usd_micro: number; coin_per_unit: number
+  action_type: string; status: string; target_count: number; delivered_count: number
+  buyer_email: string; created_at: number; coin_per_unit: number
 }
 
 interface AdminClaim {
   id: string; task_id: string; claimer_email: string
   channel_name: string | null; action_type: string
   status: string; claimed_at: number; coin_amount: number
-  youtube_channel_id: string | null
 }
 
 interface UserGroup {
   id: string; name: string; max_channels: number; created_at: number; user_count: number
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function actionBadge(type: string) {
+  const colors: Record<string, string> = {
+    SUBSCRIBE: '#f97316',
+    LIKE: '#ef4444',
+    COMMENT: '#818cf8',
+  }
+  return (
+    <span
+      className="badge"
+      style={{ background: colors[type] ?? 'var(--color-muted)', color: '#fff', fontSize: 11 }}
+    >
+      {type}
+    </span>
+  )
+}
+
+function statusBadge(status: string) {
+  return <span className="badge badge-gray" style={{ fontSize: 11 }}>{status}</span>
+}
+
+function Pager({ page, total, limit, onPage }: { page: number; total: number; limit: number; onPage: (p: number) => void }) {
+  const totalPages = Math.ceil(total / limit)
+  if (totalPages <= 1) return null
+  return (
+    <div className="flex gap-2 justify-end pt-1">
+      <button className="btn btn-ghost text-sm" onClick={() => onPage(page - 1)} disabled={page === 1}>Prev</button>
+      <span className="text-sm py-1" style={{ color: 'var(--color-muted)' }}>{page} / {totalPages}</span>
+      <button className="btn btn-ghost text-sm" onClick={() => onPage(page + 1)} disabled={page === totalPages}>Next</button>
+    </div>
+  )
 }
 
 // ─── Stat Card ────────────────────────────────────────────────────────────────
@@ -70,7 +106,7 @@ function StatsTab() {
         <StatCard label="Total Tasks" value={taskTotal} />
         <StatCard label="Total Claims" value={claimTotal} />
         <StatCard label="Verified Claims" value={claimVerified} />
-        <StatCard label="Total Coins Circulating" value={(data?.wallets?.total_coin ?? 0).toLocaleString()} />
+        <StatCard label="Coins Circulating" value={(data?.wallets?.total_coin ?? 0).toLocaleString()} />
         <StatCard label="Coins Pending" value={(data?.wallets?.total_coin_pending ?? 0).toLocaleString()} />
       </div>
 
@@ -134,8 +170,8 @@ function UsersTab() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }),
   })
 
-  const totalPages = Math.ceil((data?.total ?? 0) / (data?.limit ?? 20))
   const groups = groupsData?.groups ?? []
+  const users = data?.users ?? []
 
   return (
     <div className="flex flex-col gap-4">
@@ -151,68 +187,110 @@ function UsersTab() {
       </div>
 
       {isLoading ? <div className="card p-8 animate-pulse h-32" /> : (
-        <div className="card overflow-hidden overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                {['Email', 'Name', 'Role', 'Group', 'YT Channels', 'Coins', 'Joined', 'Action'].map(h => (
-                  <th key={h} className="px-4 py-2.5 text-left text-xs font-medium" style={{ color: 'var(--color-muted)' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {data?.users.map(u => (
-                <tr key={u.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                  <td className="px-4 py-2.5 font-medium">{u.email}</td>
-                  <td className="px-4 py-2.5" style={{ color: 'var(--color-muted)' }}>{u.name}</td>
-                  <td className="px-4 py-2.5">
-                    <span className={`badge ${u.role === 'admin' ? 'badge-orange' : 'badge-gray'}`}>{u.role}</span>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <span className="badge badge-gray text-xs">{u.group_name}</span>
-                  </td>
-                  <td className="px-4 py-2.5 text-xs mono" style={{ color: 'var(--color-muted)' }}>
-                    {u.linked_channels_count} / {u.max_channels}
-                  </td>
-                  <td className="px-4 py-2.5 mono text-xs">{u.coin_balance} coin</td>
-                  <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--color-muted)' }}>
-                    {new Date(u.created_at * 1000).toLocaleDateString()}
-                  </td>
-                  <td className="px-4 py-2.5 flex items-center gap-2">
-                    <button
-                      className="btn btn-ghost text-xs"
-                      onClick={() => roleMutation.mutate({ id: u.id, role: u.role === 'admin' ? 'user' : 'admin' })}
-                      disabled={roleMutation.isPending}
-                    >
-                      {u.role === 'admin' ? 'Demote' : 'Promote'}
-                    </button>
-                    {groups.length > 0 && (
-                      <select
-                        className="input text-xs py-0.5 px-1"
-                        value={u.group_id ?? 'default'}
-                        onChange={e => groupMutation.mutate({ id: u.id, group_id: e.target.value })}
-                        disabled={groupMutation.isPending}
-                      >
-                        {groups.map(g => (
-                          <option key={g.id} value={g.id}>{g.name}</option>
-                        ))}
-                      </select>
-                    )}
-                  </td>
+        <>
+          {/* Desktop table */}
+          <div className="card overflow-hidden overflow-x-auto hidden md:block">
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+                  {['Email', 'Role', 'Group', 'YT Ch.', 'Coins', 'Joined', 'Actions'].map(h => (
+                    <th key={h} className="px-4 py-2.5 text-left text-xs font-medium" style={{ color: 'var(--color-muted)' }}>{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {users.map(u => (
+                  <tr key={u.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                    <td className="px-4 py-2.5">
+                      <p className="font-medium text-xs">{u.email}</p>
+                      <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{u.name}</p>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span className={`badge ${u.role === 'admin' ? 'badge-orange' : 'badge-gray'}`}>{u.role}</span>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span className="badge badge-gray text-xs">{u.group_name}</span>
+                    </td>
+                    <td className="px-4 py-2.5 mono text-xs" style={{ color: 'var(--color-muted)' }}>
+                      {u.linked_channels_count}/{u.max_channels}
+                    </td>
+                    <td className="px-4 py-2.5 mono text-xs">{u.coin_balance}</td>
+                    <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--color-muted)' }}>
+                      {new Date(u.created_at * 1000).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          className="btn btn-ghost text-xs"
+                          onClick={() => roleMutation.mutate({ id: u.id, role: u.role === 'admin' ? 'user' : 'admin' })}
+                          disabled={roleMutation.isPending}
+                        >
+                          {u.role === 'admin' ? 'Demote' : 'Promote'}
+                        </button>
+                        {groups.length > 0 && (
+                          <select
+                            className="input text-xs py-0.5 px-1"
+                            value={u.group_id ?? 'default'}
+                            onChange={e => groupMutation.mutate({ id: u.id, group_id: e.target.value })}
+                            disabled={groupMutation.isPending}
+                          >
+                            {groups.map(g => (
+                              <option key={g.id} value={g.id}>{g.name}</option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="flex flex-col gap-2 md:hidden">
+            {users.map(u => (
+              <div key={u.id} className="card p-4 flex flex-col gap-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm truncate">{u.email}</p>
+                    <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{u.name}</p>
+                  </div>
+                  <span className={`badge flex-shrink-0 ${u.role === 'admin' ? 'badge-orange' : 'badge-gray'}`}>{u.role}</span>
+                </div>
+                <div className="flex gap-3 text-xs" style={{ color: 'var(--color-muted)' }}>
+                  <span>Group: <strong style={{ color: 'var(--color-text)' }}>{u.group_name}</strong></span>
+                  <span>YT: <strong style={{ color: 'var(--color-text)' }}>{u.linked_channels_count}/{u.max_channels}</strong></span>
+                  <span>Coins: <strong style={{ color: 'var(--color-text)' }}>{u.coin_balance}</strong></span>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    className="btn btn-ghost text-xs"
+                    onClick={() => roleMutation.mutate({ id: u.id, role: u.role === 'admin' ? 'user' : 'admin' })}
+                    disabled={roleMutation.isPending}
+                  >
+                    {u.role === 'admin' ? 'Demote' : 'Promote'}
+                  </button>
+                  {groups.length > 0 && (
+                    <select
+                      className="input text-xs py-0.5 px-1"
+                      value={u.group_id ?? 'default'}
+                      onChange={e => groupMutation.mutate({ id: u.id, group_id: e.target.value })}
+                      disabled={groupMutation.isPending}
+                    >
+                      {groups.map(g => (
+                        <option key={g.id} value={g.id}>{g.name}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
-      {totalPages > 1 && (
-        <div className="flex gap-2 justify-end">
-          <button className="btn btn-ghost text-sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>Prev</button>
-          <span className="text-sm py-1" style={{ color: 'var(--color-muted)' }}>{page} / {totalPages}</span>
-          <button className="btn btn-ghost text-sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>Next</button>
-        </div>
-      )}
+      <Pager page={page} total={data?.total ?? 0} limit={data?.limit ?? 20} onPage={setPage} />
     </div>
   )
 }
@@ -237,13 +315,13 @@ function TasksTab() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-tasks'] }),
   })
 
-  const totalPages = Math.ceil((data?.total ?? 0) / (data?.limit ?? 20))
-  const STATUS_OPTIONS = ['', 'OPEN', 'FILLING', 'COMPLETED', 'CANCELLED', 'EXPIRED']
+  const TASK_STATUSES = ['OPEN', 'FILLING', 'COMPLETED', 'CANCELLED', 'EXPIRED']
+  const tasks = data?.tasks ?? []
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex gap-2 flex-wrap">
-        {STATUS_OPTIONS.map(s => (
+        {(['', ...TASK_STATUSES]).map(s => (
           <button
             key={s || 'ALL'}
             className={`btn text-xs ${statusFilter === s ? 'btn-primary' : 'btn-ghost'}`}
@@ -255,51 +333,72 @@ function TasksTab() {
       </div>
 
       {isLoading ? <div className="card p-8 animate-pulse h-32" /> : (
-        <div className="card overflow-hidden overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                {['Channel', 'Action', 'Status', 'Progress', 'Buyer', 'Date', 'Action'].map(h => (
-                  <th key={h} className="px-4 py-2.5 text-left text-xs font-medium" style={{ color: 'var(--color-muted)' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {data?.tasks.map(t => (
-                <tr key={t.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                  <td className="px-4 py-2.5 font-medium max-w-[140px] truncate">{t.channel_name ?? t.channel_id.slice(0, 12)}</td>
-                  <td className="px-4 py-2.5"><span className="badge" style={{ background: t.action_type === 'SUBSCRIBE' ? 'orange' : t.action_type === 'LIKE' ? 'var(--color-danger)' : '#818cf8', color: '#fff' }}>{t.action_type}</span></td>
-                  <td className="px-4 py-2.5"><span className="badge badge-gray">{t.status}</span></td>
-                  <td className="px-4 py-2.5 mono text-xs">{t.delivered_count}/{t.target_count}</td>
-                  <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--color-muted)' }}>{t.buyer_email}</td>
-                  <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--color-muted)' }}>
-                    {new Date(t.created_at * 1000).toLocaleDateString()}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <select
-                      className="input text-xs py-0.5 px-1"
-                      value={t.status}
-                      onChange={e => statusMutation.mutate({ id: t.id, status: e.target.value })}
-                    >
-                      {['OPEN', 'FILLING', 'COMPLETED', 'CANCELLED', 'EXPIRED'].map(s => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
-                  </td>
+        <>
+          {/* Desktop table */}
+          <div className="card overflow-hidden overflow-x-auto hidden md:block">
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+                  {['Channel', 'Action', 'Status', 'Progress', 'Coin/unit', 'Buyer', 'Date', 'Change'].map(h => (
+                    <th key={h} className="px-4 py-2.5 text-left text-xs font-medium" style={{ color: 'var(--color-muted)' }}>{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {tasks.map(t => (
+                  <tr key={t.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                    <td className="px-4 py-2.5 font-medium max-w-[130px] truncate text-sm">{t.channel_name ?? t.channel_id.slice(0, 10)}</td>
+                    <td className="px-4 py-2.5">{actionBadge(t.action_type)}</td>
+                    <td className="px-4 py-2.5">{statusBadge(t.status)}</td>
+                    <td className="px-4 py-2.5 mono text-xs">{t.delivered_count}/{t.target_count}</td>
+                    <td className="px-4 py-2.5 mono text-xs">{t.coin_per_unit}</td>
+                    <td className="px-4 py-2.5 text-xs max-w-[120px] truncate" style={{ color: 'var(--color-muted)' }}>{t.buyer_email}</td>
+                    <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--color-muted)' }}>
+                      {new Date(t.created_at * 1000).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <select
+                        className="input text-xs py-0.5 px-1"
+                        value={t.status}
+                        onChange={e => statusMutation.mutate({ id: t.id, status: e.target.value })}
+                      >
+                        {TASK_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="flex flex-col gap-2 md:hidden">
+            {tasks.map(t => (
+              <div key={t.id} className="card p-4 flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-medium text-sm truncate">{t.channel_name ?? t.channel_id.slice(0, 12)}</p>
+                  {actionBadge(t.action_type)}
+                </div>
+                <div className="flex gap-3 items-center flex-wrap">
+                  {statusBadge(t.status)}
+                  <span className="text-xs mono" style={{ color: 'var(--color-muted)' }}>{t.delivered_count}/{t.target_count}</span>
+                  <span className="text-xs mono" style={{ color: 'var(--color-muted)' }}>{t.coin_per_unit} coin/unit</span>
+                </div>
+                <p className="text-xs truncate" style={{ color: 'var(--color-muted)' }}>{t.buyer_email}</p>
+                <select
+                  className="input text-xs py-1 px-2 self-start"
+                  value={t.status}
+                  onChange={e => statusMutation.mutate({ id: t.id, status: e.target.value })}
+                >
+                  {TASK_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
-      {totalPages > 1 && (
-        <div className="flex gap-2 justify-end">
-          <button className="btn btn-ghost text-sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>Prev</button>
-          <span className="text-sm py-1" style={{ color: 'var(--color-muted)' }}>{page} / {totalPages}</span>
-          <button className="btn btn-ghost text-sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>Next</button>
-        </div>
-      )}
+      <Pager page={page} total={data?.total ?? 0} limit={data?.limit ?? 20} onPage={setPage} />
     </div>
   )
 }
@@ -324,13 +423,13 @@ function ClaimsTab() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-claims'] }),
   })
 
-  const totalPages = Math.ceil((data?.total ?? 0) / (data?.limit ?? 20))
-  const STATUS_OPTIONS = ['', 'CLAIMED', 'SUBMITTED', 'VERIFIED', 'REJECTED', 'EXPIRED']
+  const CLAIM_STATUSES = ['CLAIMED', 'SUBMITTED', 'VERIFIED', 'REJECTED', 'EXPIRED']
+  const claims = data?.claims ?? []
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex gap-2 flex-wrap">
-        {STATUS_OPTIONS.map(s => (
+        {(['', ...CLAIM_STATUSES]).map(s => (
           <button
             key={s || 'ALL'}
             className={`btn text-xs ${statusFilter === s ? 'btn-primary' : 'btn-ghost'}`}
@@ -342,51 +441,72 @@ function ClaimsTab() {
       </div>
 
       {isLoading ? <div className="card p-8 animate-pulse h-32" /> : (
-        <div className="card overflow-hidden overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                {['Claimer', 'Channel', 'Action', 'Status', 'Coins', 'Date', 'Action'].map(h => (
-                  <th key={h} className="px-4 py-2.5 text-left text-xs font-medium" style={{ color: 'var(--color-muted)' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {data?.claims.map(cl => (
-                <tr key={cl.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                  <td className="px-4 py-2.5 text-xs font-medium">{cl.claimer_email}</td>
-                  <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--color-muted)' }}>{cl.channel_name ?? '—'}</td>
-                  <td className="px-4 py-2.5"><span className="badge" style={{ background: cl.action_type === 'SUBSCRIBE' ? 'orange' : cl.action_type === 'LIKE' ? 'var(--color-danger)' : '#818cf8', color: '#fff' }}>{cl.action_type}</span></td>
-                  <td className="px-4 py-2.5"><span className="badge badge-gray">{cl.status}</span></td>
-                  <td className="px-4 py-2.5 mono text-xs">{cl.coin_amount}</td>
-                  <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--color-muted)' }}>
-                    {new Date(cl.claimed_at * 1000).toLocaleDateString()}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <select
-                      className="input text-xs py-0.5 px-1"
-                      value={cl.status}
-                      onChange={e => statusMutation.mutate({ id: cl.id, status: e.target.value })}
-                    >
-                      {['CLAIMED', 'SUBMITTED', 'VERIFIED', 'REJECTED', 'EXPIRED'].map(s => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
-                  </td>
+        <>
+          {/* Desktop table */}
+          <div className="card overflow-hidden overflow-x-auto hidden md:block">
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+                  {['Claimer', 'Channel', 'Action', 'Status', 'Coins', 'Date', 'Change'].map(h => (
+                    <th key={h} className="px-4 py-2.5 text-left text-xs font-medium" style={{ color: 'var(--color-muted)' }}>{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {claims.map(cl => (
+                  <tr key={cl.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                    <td className="px-4 py-2.5 text-xs font-medium max-w-[130px] truncate">{cl.claimer_email}</td>
+                    <td className="px-4 py-2.5 text-xs max-w-[100px] truncate" style={{ color: 'var(--color-muted)' }}>{cl.channel_name ?? '—'}</td>
+                    <td className="px-4 py-2.5">{actionBadge(cl.action_type)}</td>
+                    <td className="px-4 py-2.5">{statusBadge(cl.status)}</td>
+                    <td className="px-4 py-2.5 mono text-xs">{cl.coin_amount}</td>
+                    <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--color-muted)' }}>
+                      {new Date(cl.claimed_at * 1000).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <select
+                        className="input text-xs py-0.5 px-1"
+                        value={cl.status}
+                        onChange={e => statusMutation.mutate({ id: cl.id, status: e.target.value })}
+                      >
+                        {CLAIM_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="flex flex-col gap-2 md:hidden">
+            {claims.map(cl => (
+              <div key={cl.id} className="card p-4 flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium truncate">{cl.claimer_email}</p>
+                  {actionBadge(cl.action_type)}
+                </div>
+                <div className="flex gap-3 items-center flex-wrap">
+                  {statusBadge(cl.status)}
+                  <span className="text-xs mono" style={{ color: 'var(--color-muted)' }}>{cl.coin_amount} coins</span>
+                  {cl.channel_name && (
+                    <span className="text-xs truncate" style={{ color: 'var(--color-muted)' }}>{cl.channel_name}</span>
+                  )}
+                </div>
+                <select
+                  className="input text-xs py-1 px-2 self-start"
+                  value={cl.status}
+                  onChange={e => statusMutation.mutate({ id: cl.id, status: e.target.value })}
+                >
+                  {CLAIM_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
-      {totalPages > 1 && (
-        <div className="flex gap-2 justify-end">
-          <button className="btn btn-ghost text-sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>Prev</button>
-          <span className="text-sm py-1" style={{ color: 'var(--color-muted)' }}>{page} / {totalPages}</span>
-          <button className="btn btn-ghost text-sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>Next</button>
-        </div>
-      )}
+      <Pager page={page} total={data?.total ?? 0} limit={data?.limit ?? 20} onPage={setPage} />
     </div>
   )
 }
@@ -394,11 +514,11 @@ function ClaimsTab() {
 // ─── Pricing Tab ──────────────────────────────────────────────────────────────
 
 const PRICING_FIELDS = [
-  { key: 'xu_per_subscribe',      label: 'Coin reward — Subscribe (coin/task)' },
-  { key: 'xu_per_like',           label: 'Coin reward — Like (coin/task)' },
-  { key: 'xu_per_comment',        label: 'Coin reward — Comment (coin/task)' },
-  { key: 'cooldown_seconds',      label: 'Claim cooldown (seconds, 0 = instant)' },
-  { key: 'task_cooldown_seconds', label: 'Between-task cooldown (seconds)' },
+  { key: 'coin_per_subscribe',    label: 'Coin reward — Subscribe', unit: 'coins/task' },
+  { key: 'coin_per_like',         label: 'Coin reward — Like',      unit: 'coins/task' },
+  { key: 'coin_per_comment',      label: 'Coin reward — Comment',   unit: 'coins/task' },
+  { key: 'cooldown_seconds',      label: 'Claim → verify cooldown', unit: 'seconds' },
+  { key: 'task_cooldown_seconds', label: 'Between-task cooldown',   unit: 'seconds' },
 ] as const
 
 type PricingKey = typeof PRICING_FIELDS[number]['key']
@@ -442,27 +562,26 @@ function PricingTab() {
     },
   })
 
-  const setField = (key: PricingKey, raw: string) => {
-    setValues(prev => ({ ...prev, [key]: parseInt(raw) || '' }))
-  }
-
   if (isLoading) return <div className="card p-8 animate-pulse h-32" />
 
   return (
-    <div className="card p-6 flex flex-col gap-5 max-w-md">
+    <div className="card p-5 flex flex-col gap-5 max-w-md w-full">
       <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-        These coin rewards apply to all new tasks. Existing tasks are unaffected. Coins are earned by completing tasks — not purchased.
+        Applies to all new tasks. Existing tasks unaffected. Coins are earned by completing tasks — not purchased.
       </p>
 
-      {PRICING_FIELDS.map(({ key, label }) => (
+      {PRICING_FIELDS.map(({ key, label, unit }) => (
         <div key={key} className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium">{label}</label>
+          <label className="text-sm font-medium">
+            {label}
+            <span className="ml-1.5 text-xs font-normal" style={{ color: 'var(--color-muted)' }}>({unit})</span>
+          </label>
           <input
             type="number"
             className="input"
             min={0}
             value={values[key]}
-            onChange={e => setField(key, e.target.value)}
+            onChange={e => setValues(prev => ({ ...prev, [key]: parseInt(e.target.value) || '' }))}
           />
         </div>
       ))}
@@ -472,7 +591,7 @@ function PricingTab() {
         onClick={() => saveMutation.mutate()}
         disabled={saveMutation.isPending}
       >
-        {saved ? '✓ Saved' : saveMutation.isPending ? 'Saving...' : 'Save pricing'}
+        {saved ? '✓ Saved' : saveMutation.isPending ? 'Saving...' : 'Save'}
       </button>
     </div>
   )
@@ -516,52 +635,36 @@ function GroupsTab() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-groups'] }),
   })
 
-  const startEdit = (g: UserGroup) => {
-    setEditId(g.id)
-    setEditName(g.name)
-    setEditMax(g.max_channels)
-  }
-
   if (isLoading) return <div className="card p-8 animate-pulse h-32" />
+
+  const groups = data?.groups ?? []
 
   return (
     <div className="flex flex-col gap-6">
       {/* Create form */}
-      <div className="card p-5 flex flex-col gap-4 max-w-md">
-        <p className="text-sm font-semibold">Create New Group</p>
-        <div className="flex flex-col gap-3">
+      <div className="card p-5 flex flex-col gap-4 max-w-md w-full">
+        <p className="text-sm font-semibold">Create Group</p>
+        <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Group Name</label>
-            <input
-              className="input"
-              placeholder="e.g. VIP Users"
-              value={newName}
-              onChange={e => setNewName(e.target.value)}
-            />
+            <label className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Name</label>
+            <input className="input" placeholder="e.g. VIP Users" value={newName} onChange={e => setNewName(e.target.value)} />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs font-medium" style={{ color: 'var(--color-muted)' }}>Max Channels</label>
-            <input
-              type="number"
-              className="input"
-              min={1}
-              placeholder="e.g. 5"
-              value={newMax}
-              onChange={e => setNewMax(parseInt(e.target.value) || '')}
-            />
+            <input type="number" className="input" min={1} placeholder="e.g. 5" value={newMax} onChange={e => setNewMax(parseInt(e.target.value) || '')} />
           </div>
-          <button
-            className="btn btn-primary self-start"
-            onClick={() => createMutation.mutate()}
-            disabled={!newName || !newMax || createMutation.isPending}
-          >
-            {createMutation.isPending ? 'Creating...' : 'Create Group'}
-          </button>
         </div>
+        <button
+          className="btn btn-primary self-start"
+          onClick={() => createMutation.mutate()}
+          disabled={!newName || !newMax || createMutation.isPending}
+        >
+          {createMutation.isPending ? 'Creating...' : 'Create'}
+        </button>
       </div>
 
-      {/* Groups list */}
-      <div className="card overflow-hidden">
+      {/* Desktop table */}
+      <div className="card overflow-hidden hidden md:block">
         <table className="w-full text-sm">
           <thead>
             <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
@@ -571,79 +674,92 @@ function GroupsTab() {
             </tr>
           </thead>
           <tbody>
-            {data?.groups.map(g => (
+            {groups.map(g => (
               <tr key={g.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
                 <td className="px-4 py-2.5">
-                  {editId === g.id ? (
-                    <input
-                      className="input text-sm py-0.5 px-2 w-40"
-                      value={editName}
-                      onChange={e => setEditName(e.target.value)}
-                    />
-                  ) : (
-                    <span className="font-medium">{g.name}</span>
-                  )}
-                  {g.id === 'default' && (
-                    <span className="badge badge-gray ml-2 text-xs">default</span>
-                  )}
+                  {editId === g.id
+                    ? <input className="input text-sm py-0.5 px-2 w-40" value={editName} onChange={e => setEditName(e.target.value)} />
+                    : <><span className="font-medium">{g.name}</span>{g.id === 'default' && <span className="badge badge-gray ml-2 text-xs">default</span>}</>
+                  }
                 </td>
                 <td className="px-4 py-2.5">
-                  {editId === g.id ? (
-                    <input
-                      type="number"
-                      className="input text-sm py-0.5 px-2 w-20"
-                      min={1}
-                      value={editMax}
-                      onChange={e => setEditMax(parseInt(e.target.value) || '')}
-                    />
-                  ) : (
-                    <span className="mono">{g.max_channels}</span>
-                  )}
+                  {editId === g.id
+                    ? <input type="number" className="input text-sm py-0.5 px-2 w-20" min={1} value={editMax} onChange={e => setEditMax(parseInt(e.target.value) || '')} />
+                    : <span className="mono">{g.max_channels}</span>
+                  }
                 </td>
-                <td className="px-4 py-2.5 mono text-xs" style={{ color: 'var(--color-muted)' }}>
-                  {g.user_count}
-                </td>
-                <td className="px-4 py-2.5 flex items-center gap-2">
-                  {editId === g.id ? (
-                    <>
-                      <button
-                        className="btn btn-primary text-xs"
-                        onClick={() => updateMutation.mutate({ id: g.id })}
-                        disabled={updateMutation.isPending}
-                      >
-                        Save
-                      </button>
-                      <button className="btn btn-ghost text-xs" onClick={() => setEditId(null)}>
-                        Cancel
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        className="btn btn-ghost text-xs flex items-center gap-1"
-                        onClick={() => startEdit(g)}
-                      >
-                        <PencilSimple size={13} /> Edit
-                      </button>
-                      <button
-                        className="btn btn-ghost text-xs flex items-center gap-1"
-                        style={{ color: g.id === 'default' ? 'var(--color-muted)' : 'var(--color-danger)' }}
-                        disabled={g.id === 'default' || deleteMutation.isPending}
-                        onClick={() => {
-                          if (g.id !== 'default' && confirm(`Delete group "${g.name}"? Users will be moved to default group.`)) {
-                            deleteMutation.mutate(g.id)
-                          }
-                        }}
-                      >
-                        <Trash size={13} /> Delete
-                      </button>
-                    </>
-                  )}
+                <td className="px-4 py-2.5 mono text-xs" style={{ color: 'var(--color-muted)' }}>{g.user_count}</td>
+                <td className="px-4 py-2.5">
+                  <div className="flex items-center gap-2">
+                    {editId === g.id ? (
+                      <>
+                        <button className="btn btn-primary text-xs" onClick={() => updateMutation.mutate({ id: g.id })} disabled={updateMutation.isPending}>Save</button>
+                        <button className="btn btn-ghost text-xs" onClick={() => setEditId(null)}>Cancel</button>
+                      </>
+                    ) : (
+                      <>
+                        <button className="btn btn-ghost text-xs flex items-center gap-1" onClick={() => { setEditId(g.id); setEditName(g.name); setEditMax(g.max_channels) }}>
+                          <PencilSimple size={13} /> Edit
+                        </button>
+                        <button
+                          className="btn btn-ghost text-xs flex items-center gap-1"
+                          style={{ color: g.id === 'default' ? 'var(--color-muted)' : 'var(--color-danger)' }}
+                          disabled={g.id === 'default' || deleteMutation.isPending}
+                          onClick={() => { if (g.id !== 'default' && confirm(`Delete "${g.name}"? Users move to default.`)) deleteMutation.mutate(g.id) }}
+                        >
+                          <Trash size={13} /> Delete
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile cards */}
+      <div className="flex flex-col gap-2 md:hidden">
+        {groups.map(g => (
+          <div key={g.id} className="card p-4 flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-2">
+              {editId === g.id
+                ? <input className="input text-sm py-0.5 px-2 flex-1" value={editName} onChange={e => setEditName(e.target.value)} />
+                : <p className="font-medium text-sm">{g.name} {g.id === 'default' && <span className="badge badge-gray text-xs ml-1">default</span>}</p>
+              }
+            </div>
+            <div className="flex gap-3 text-xs" style={{ color: 'var(--color-muted)' }}>
+              <span>Max channels: {editId === g.id
+                ? <input type="number" className="input text-xs py-0.5 px-1 w-16 inline" min={1} value={editMax} onChange={e => setEditMax(parseInt(e.target.value) || '')} />
+                : <strong style={{ color: 'var(--color-text)' }}>{g.max_channels}</strong>
+              }</span>
+              <span>Users: <strong style={{ color: 'var(--color-text)' }}>{g.user_count}</strong></span>
+            </div>
+            <div className="flex gap-2">
+              {editId === g.id ? (
+                <>
+                  <button className="btn btn-primary text-xs" onClick={() => updateMutation.mutate({ id: g.id })} disabled={updateMutation.isPending}>Save</button>
+                  <button className="btn btn-ghost text-xs" onClick={() => setEditId(null)}>Cancel</button>
+                </>
+              ) : (
+                <>
+                  <button className="btn btn-ghost text-xs flex items-center gap-1" onClick={() => { setEditId(g.id); setEditName(g.name); setEditMax(g.max_channels) }}>
+                    <PencilSimple size={13} /> Edit
+                  </button>
+                  <button
+                    className="btn btn-ghost text-xs flex items-center gap-1"
+                    style={{ color: g.id === 'default' ? 'var(--color-muted)' : 'var(--color-danger)' }}
+                    disabled={g.id === 'default' || deleteMutation.isPending}
+                    onClick={() => { if (g.id !== 'default' && confirm(`Delete "${g.name}"?`)) deleteMutation.mutate(g.id) }}
+                  >
+                    <Trash size={13} /> Delete
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -652,16 +768,18 @@ function GroupsTab() {
 // ─── Main AdminPage ───────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: 'stats', label: 'Overview', icon: ChartBar },
-  { id: 'users', label: 'Users', icon: Users },
-  { id: 'tasks', label: 'Tasks', icon: ListBullets },
-  { id: 'claims', label: 'Claims', icon: ShieldCheck },
-  { id: 'pricing', label: 'Pricing', icon: CurrencyDollar },
-  { id: 'groups', label: 'Groups', icon: UsersThree },
+  { id: 'overview', label: 'Overview', icon: ChartBar },
+  { id: 'users',    label: 'Users',    icon: Users },
+  { id: 'tasks',    label: 'Tasks',    icon: ListBullets },
+  { id: 'claims',   label: 'Claims',   icon: ShieldCheck },
+  { id: 'pricing',  label: 'Pricing',  icon: CurrencyDollar },
+  { id: 'groups',   label: 'Groups',   icon: UsersThree },
 ]
 
 export function AdminPage() {
-  const [tab, setTab] = useState('stats')
+  const { tab } = useParams<{ tab?: string }>()
+  const navigate = useNavigate()
+  const activeTab = TABS.find(t => t.id === tab)?.id ?? 'overview'
 
   const { data: meData, isLoading } = useQuery({
     queryKey: ['me'],
@@ -694,28 +812,28 @@ export function AdminPage() {
           {TABS.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
-              className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors whitespace-nowrap"
+              className="flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium transition-colors whitespace-nowrap"
               style={{
-                color: tab === id ? 'var(--color-text)' : 'var(--color-muted)',
-                borderBottom: tab === id ? '2px solid var(--color-orange)' : '2px solid transparent',
+                color: activeTab === id ? 'var(--color-text)' : 'var(--color-muted)',
+                borderBottom: activeTab === id ? '2px solid var(--color-orange)' : '2px solid transparent',
                 marginBottom: '-1px',
               }}
-              onClick={() => setTab(id)}
+              onClick={() => navigate(`/admin/${id}`)}
             >
-              <Icon size={15} weight={tab === id ? 'fill' : 'regular'} />
-              {label}
+              <Icon size={15} weight={activeTab === id ? 'fill' : 'regular'} />
+              <span className="hidden sm:inline">{label}</span>
             </button>
           ))}
         </div>
       </FadeUp>
 
       <FadeUp delay={0.08}>
-        {tab === 'stats' && <StatsTab />}
-        {tab === 'users' && <UsersTab />}
-        {tab === 'tasks' && <TasksTab />}
-        {tab === 'claims' && <ClaimsTab />}
-        {tab === 'pricing' && <PricingTab />}
-        {tab === 'groups' && <GroupsTab />}
+        {activeTab === 'overview' && <StatsTab />}
+        {activeTab === 'users'    && <UsersTab />}
+        {activeTab === 'tasks'    && <TasksTab />}
+        {activeTab === 'claims'   && <ClaimsTab />}
+        {activeTab === 'pricing'  && <PricingTab />}
+        {activeTab === 'groups'   && <GroupsTab />}
       </FadeUp>
     </div>
   )
