@@ -1,9 +1,9 @@
-// Xu economy logic — single source of truth for all xu operations
+// Coin economy logic — single source of truth for all coin operations
 // All mutations go through these functions, never raw SQL in routes
 
 import type { Env } from '../bindings'
 
-// Credit xu to earner after verify (moves to PENDING, not LOCKED yet)
+// Credit coins to earner after verify (moves to PENDING, not LOCKED yet)
 // Called immediately after OAuth verify passes
 export async function creditXuPending(
   db: D1Database,
@@ -27,12 +27,12 @@ export async function creditXuPending(
     `).bind(
       crypto.randomUUID(), claimerId, 'EARN',
       xuAmount, 'XU', claimId,
-      'Xu pending — chờ 48h unlock'
+      'Coins pending — waiting 48h unlock'
     ),
   ])
 }
 
-// Unlock xu after 48h churn check passes (LOCKED → CREDITED)
+// Unlock coins after 48h churn check passes (LOCKED → CREDITED)
 export async function unlockXu(
   db: D1Database,
   claimId: string,
@@ -55,12 +55,12 @@ export async function unlockXu(
     `).bind(
       crypto.randomUUID(), claimerId, 'EARN',
       xuAmount, 'XU', claimId,
-      'Xu unlock sau 48h verify thành công'
+      'Coins unlocked after 48h verify success'
     ),
   ])
 }
 
-// Claw back xu when churn detected (LOCKED → CLAWED_BACK)
+// Claw back coins when churn detected (LOCKED → CLAWED_BACK)
 export async function clawBackXu(
   db: D1Database,
   claimId: string,
@@ -80,12 +80,12 @@ export async function clawBackXu(
     `).bind(
       crypto.randomUUID(), claimerId, 'CLAW_BACK',
       xuAmount, 'XU', claimId,
-      'Unsub phát hiện sau 48h — thu hồi xu'
+      'Unsub detected after 48h — coins clawed back'
     ),
   ])
 }
 
-// Spend xu for CROSS_SUB order (escrow lock from buyer)
+// Spend coins for CROSS_SUB order (escrow lock from buyer)
 export async function escrowXu(
   db: D1Database,
   userId: string,
@@ -102,7 +102,7 @@ export async function escrowXu(
     `).bind(
       crypto.randomUUID(), userId, 'ESCROW_LOCK',
       xuAmount, 'XU', taskId,
-      'Xu escrow lock cho cross-sub task'
+      'Coins escrow lock for cross-sub task'
     ),
   ])
 }
@@ -124,12 +124,12 @@ export async function releaseEscrowXu(
     `).bind(
       crypto.randomUUID(), userId, 'ESCROW_RELEASE',
       xuAmount, 'XU', taskId,
-      'Xu escrow hoàn lại — task cancelled'
+      'Coins escrow returned — task cancelled'
     ),
   ])
 }
 
-// Current xu rate (platform configurable — stored in KV)
+// Current coin rate (platform configurable — stored in KV)
 export async function getXuRate(kv: KVNamespace): Promise<{ earnPerSub: number; costPerSub: number }> {
   const raw = await kv.get('xu:rate')
   if (raw) {
@@ -137,6 +137,6 @@ export async function getXuRate(kv: KVNamespace): Promise<{ earnPerSub: number; 
       return JSON.parse(raw) as { earnPerSub: number; costPerSub: number }
     } catch { /* fall through */ }
   }
-  // Default rate: earn 10 xu/sub, spend 14 xu/sub (platform keeps 4 xu spread)
+  // Default rate: earn 10 coins/sub, spend 14 coins/sub (platform keeps 4 coin spread)
   return { earnPerSub: 10, costPerSub: 14 }
 }

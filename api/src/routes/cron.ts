@@ -3,7 +3,7 @@ import type { Env } from '../bindings'
 import type { HonoVariables } from '../types'
 
 // Cron: runs every 6h via CF Cron Trigger
-// Job: unlock xu for claims where xu_locked_at < now - 48h
+// Job: unlock coins for claims where xu_locked_at < now - 48h
 //      Check: still subscribed (YouTube API) → CREDITED or CLAWED_BACK
 
 const XU_LOCK_DURATION = 48 * 3600  // 48 hours in seconds
@@ -56,7 +56,7 @@ export async function cronHandler(c: Context<{ Bindings: Env; Variables: HonoVar
         c.env.DB.prepare(`
           INSERT INTO wallet_txns (id, user_id, type, amount, currency, ref_id, note)
           VALUES (?,?,?,?,?,?,?)
-        `).bind(crypto.randomUUID(), claim.claimer_id, 'EARN', claim.xu_amount, 'XU', claim.id, 'Xu unlock sau 48h verify'),
+        `).bind(crypto.randomUUID(), claim.claimer_id, 'EARN', claim.xu_amount, 'XU', claim.id, 'Coins unlocked after 48h verify'),
       ])
       credited++
     } else {
@@ -71,7 +71,7 @@ export async function cronHandler(c: Context<{ Bindings: Env; Variables: HonoVar
         c.env.DB.prepare(`
           INSERT INTO wallet_txns (id, user_id, type, amount, currency, ref_id, note)
           VALUES (?,?,?,?,?,?,?)
-        `).bind(crypto.randomUUID(), claim.claimer_id, 'CLAW_BACK', claim.xu_amount, 'XU', claim.id, 'Unsub phát hiện → thu hồi xu'),
+        `).bind(crypto.randomUUID(), claim.claimer_id, 'CLAW_BACK', claim.xu_amount, 'XU', claim.id, 'Unsub detected — coins clawed back'),
       ])
       clawedBack++
     }

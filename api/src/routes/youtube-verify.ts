@@ -2,213 +2,332 @@ import { Hono } from 'hono'
 import type { Env } from '../bindings'
 import type { HonoVariables } from '../types'
 import { requireAuth } from '../middleware/auth'
-import { verifySubscription, getMyChannelId } from '../lib/youtube'
+import { verifySubscription, refreshAccessToken, subscribeToChannel, likeVideo, verifyLike, postComment, verifyComment } from '../lib/youtube'
 import { creditXuPending } from '../lib/xu'
-
-// YouTube OAuth verify flow for claim submission
-// Flow: submit claim → redirect here → Google OAuth → verify sub → credit xu
-//
-// IMPORTANT: Access token is NEVER stored — use → verify → discard immediately
-
-const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
-const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth'
-
-// Scope: read-only subscriptions list (minimum required)
-const YT_SCOPE = 'https://www.googleapis.com/auth/youtube.readonly'
 
 export const youtubeVerifyRoutes = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
 
-// Step 1: Initiate YouTube OAuth for claim verify
-// GET /api/youtube-verify/start?claim_id=X
-youtubeVerifyRoutes.get('/start', async (c) => {
+// POST /api/youtube-verify/:claimId
+// Server-side verify using stored refresh token — no OAuth redirect needed
+youtubeVerifyRoutes.post('/:claimId', async (c) => {
   const guard = requireAuth(c)
   if (guard) return guard
 
-  const claimId = c.req.query('claim_id')
-  if (!claimId) return c.json({ error: 'MISSING_CLAIM_ID', message: 'Thiếu claim_id' }, 400)
-
   const userId = c.get('userId')!
+  const claimId = c.req.param('claimId')
 
-  // Verify claim belongs to user and is in SUBMITTED state
-  const claim = await c.env.DB.prepare(`
-    SELECT tc.id, tc.status, t.channel_id, t.channel_url
-    FROM task_claims tc
-    JOIN tasks t ON t.id = tc.task_id
-    WHERE tc.id = ? AND tc.claimer_id = ?
-  `).bind(claimId, userId).first<{
-    id: string; status: string; channel_id: string; channel_url: string
-  }>()
+  // 1. Load user's linked YouTube channel + refresh token
+  const { channel_id } = await c.req.json<{ channel_id?: string }>().catch(() => ({ channel_id: undefined }))
 
-  if (!claim) return c.json({ error: 'CLAIM_NOT_FOUND', message: 'Claim không tồn tại' }, 404)
-  if (claim.status !== 'SUBMITTED') {
-    return c.json({ error: 'CLAIM_WRONG_STATE', message: 'Claim chưa submit hoặc đã verify' }, 400)
+  const channelRow = await c.env.DB.prepare(
+    channel_id
+      ? `SELECT channel_id, refresh_token FROM user_linked_channels WHERE user_id = ? AND channel_id = ?`
+      : `SELECT channel_id, refresh_token FROM user_linked_channels WHERE user_id = ? LIMIT 1`
+  ).bind(...(channel_id ? [userId, channel_id] : [userId])).first<{ channel_id: string; refresh_token: string }>()
+
+  if (!channelRow?.refresh_token) {
+    return c.json({ error: 'NO_YT_CHANNEL', message: 'No linked YouTube channel found' }, 400)
   }
 
-  // Build OAuth state: encode claim_id + user_id (signed minimally with secret prefix)
-  const state = btoa(JSON.stringify({ claimId, userId, ts: Date.now() }))
+  const earnerChannelId = channelRow.channel_id
+  const refreshToken = channelRow.refresh_token
 
-  // Build Google OAuth URL with youtube.readonly scope
-  const authUrl = new URL(GOOGLE_AUTH_URL)
-  authUrl.searchParams.set('client_id', c.env.GOOGLE_CLIENT_ID)
-  authUrl.searchParams.set('redirect_uri', `${c.env.APP_URL}/api/youtube-verify/callback`)
-  authUrl.searchParams.set('response_type', 'code')
-  authUrl.searchParams.set('scope', YT_SCOPE)
-  authUrl.searchParams.set('state', state)
-  authUrl.searchParams.set('access_type', 'online')        // no refresh token — single use
-  authUrl.searchParams.set('prompt', 'select_account')     // force account picker
-
-  return c.redirect(authUrl.toString())
-})
-
-// Step 2: Google OAuth callback
-// GET /api/youtube-verify/callback?code=X&state=Y
-youtubeVerifyRoutes.get('/callback', async (c) => {
-  const code = c.req.query('code')
-  const stateRaw = c.req.query('state')
-  const error = c.req.query('error')
-
-  const frontendBase = c.env.APP_URL
-
-  if (error || !code || !stateRaw) {
-    return c.redirect(`${frontendBase}/verify-result?status=cancelled`)
-  }
-
-  // Decode state
-  let claimId: string, userId: string
-  try {
-    const state = JSON.parse(atob(stateRaw)) as { claimId: string; userId: string; ts: number }
-    claimId = state.claimId
-    userId = state.userId
-
-    // State must be < 10 min old
-    if (Date.now() - state.ts > 10 * 60 * 1000) {
-      return c.redirect(`${frontendBase}/verify-result?status=expired`)
-    }
-  } catch {
-    return c.redirect(`${frontendBase}/verify-result?status=invalid`)
-  }
-
-  // Exchange code for access token
-  let accessToken: string
-  try {
-    const tokenRes = await fetch(GOOGLE_TOKEN_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        code,
-        client_id: c.env.GOOGLE_CLIENT_ID,
-        client_secret: c.env.GOOGLE_CLIENT_SECRET,
-        redirect_uri: `${c.env.APP_URL}/api/youtube-verify/callback`,
-        grant_type: 'authorization_code',
-      }),
-    })
-    const tokenData = await tokenRes.json<{ access_token?: string; error?: string }>()
-    if (!tokenData.access_token) throw new Error(tokenData.error ?? 'no token')
-    accessToken = tokenData.access_token
-  } catch (e) {
-    console.error('[yt-verify] token exchange failed', e)
-    return c.redirect(`${frontendBase}/verify-result?status=token_error`)
-  }
-
-  // Load claim
+  // 2. Load claim — must be SUBMITTED and owned by user
   const claim = await c.env.DB.prepare(`
     SELECT tc.*, t.channel_id, t.xu_per_unit, t.id as task_id
     FROM task_claims tc
     JOIN tasks t ON t.id = tc.task_id
     WHERE tc.id = ? AND tc.claimer_id = ? AND tc.status = 'SUBMITTED'
   `).bind(claimId, userId).first<{
-    id: string; task_id: string; claimer_id: string;
-    channel_id: string; xu_per_unit: number;
-    youtube_channel_id: string | null; verify_attempts: number;
+    id: string; task_id: string; claimer_id: string
+    channel_id: string; xu_per_unit: number
+    youtube_channel_id: string | null; verify_attempts: number
   }>()
 
-  if (!claim) {
-    // Token received but claim invalid — discard token immediately (already done — in-memory only)
-    return c.redirect(`${frontendBase}/verify-result?status=claim_invalid`)
+  if (!claim) return c.json({ error: 'CLAIM_NOT_FOUND', message: 'Claim not found or not submitted' }, 404)
+
+  // 3. Duplicate channel check — same earner channel can't do same task twice
+  const dupCheck = await c.env.DB.prepare(
+    `SELECT 1 FROM task_claims WHERE task_id = ? AND youtube_channel_id = ? AND id != ?`
+  ).bind(claim.task_id, earnerChannelId, claimId).first()
+  if (dupCheck) {
+    return c.json({ error: 'DUPLICATE_CHANNEL', message: 'This channel has already completed this task' }, 409)
   }
 
+  // 4. Get fresh access token from stored refresh token
+  let accessToken: string
   try {
-    // 1. Get earner's YouTube channel ID
-    const earnerChannelId = await getMyChannelId(accessToken)
-    if (!earnerChannelId) {
-      await incrementVerifyAttempts(c.env.DB, claimId)
-      return c.redirect(`${frontendBase}/verify-result?status=no_channel`)
-    }
-
-    // 2. Check UNIQUE constraint — same earner channel can't do same task twice
-    const dupCheck = await c.env.DB.prepare(`
-      SELECT 1 FROM task_claims
-      WHERE task_id = ? AND youtube_channel_id = ? AND id != ?
-    `).bind(claim.task_id, earnerChannelId, claimId).first()
-
-    if (dupCheck) {
-      return c.redirect(`${frontendBase}/verify-result?status=duplicate_channel`)
-    }
-
-    // 3. Verify subscription
-    const isSubbed = await verifySubscription(accessToken, claim.channel_id)
-
-    // TOKEN DISCARDED HERE — never stored, goes out of scope after this block
-    // accessToken is now unreachable
-
-    if (!isSubbed) {
-      await incrementVerifyAttempts(c.env.DB, claimId)
-      const attempts = claim.verify_attempts + 1
-      if (attempts >= 2) {
-        await c.env.DB.prepare(
-          `UPDATE task_claims SET status = 'REJECTED' WHERE id = ?`
-        ).bind(claimId).run()
-        return c.redirect(`${frontendBase}/verify-result?status=rejected&reason=not_subscribed`)
-      }
-      return c.redirect(`${frontendBase}/verify-result?status=not_subscribed&attempts=${attempts}`)
-    }
-
-    // 4. Verify passed — record youtube_channel_id, credit xu pending
-    const now = Math.floor(Date.now() / 1000)
-    await c.env.DB.prepare(`
-      UPDATE task_claims
-      SET status = 'VERIFIED', verified_at = ?, youtube_channel_id = ?
-      WHERE id = ?
-    `).bind(now, earnerChannelId, claimId).run()
-
-    // Credit xu (LOCKED state — unlocked after 48h cron)
-    await creditXuPending(c.env.DB, claimId, userId, claim.xu_per_unit)
-
-    // Log channel to IP log (persistent — blocks future sub from same IP to same channel)
-    const ipHash = c.get('ipHash') ?? 'unknown'
-    const today = new Date().toISOString().slice(0, 10)
-    await c.env.DB.prepare(`
-      INSERT OR IGNORE INTO ip_task_log (ip_hash, channel_id, date_str)
-      VALUES (?,?,?)
-    `).bind(ipHash, claim.channel_id, today).run()
-
-    // Add to user_completed_channels (hides channel from feed forever)
-    await c.env.DB.prepare(`
-      INSERT OR IGNORE INTO user_completed_channels (user_id, channel_id)
-      VALUES (?,?)
-    `).bind(userId, claim.channel_id).run()
-
-    // Increment task delivered_count
-    await c.env.DB.prepare(`
-      UPDATE tasks SET delivered_count = delivered_count + 1,
-        status = CASE
-          WHEN delivered_count + 1 >= target_count THEN 'COMPLETED'
-          ELSE status
-        END
-      WHERE id = ?
-    `).bind(claim.task_id).run()
-
-    return c.redirect(
-      `${frontendBase}/verify-result?status=success&xu=${claim.xu_per_unit}`
-    )
+    accessToken = await refreshAccessToken(c.env.GOOGLE_CLIENT_ID, c.env.GOOGLE_CLIENT_SECRET, refreshToken)
   } catch (e) {
-    console.error('[yt-verify] verify error', e)
-    return c.redirect(`${frontendBase}/verify-result?status=error`)
+    console.error('[yt-verify] refresh token failed', e)
+    return c.json({ error: 'TOKEN_REFRESH_FAILED', message: 'YouTube token expired. Please re-link your channel.' }, 401)
   }
+
+  // 5. Verify subscription
+  let isSubbed: boolean
+  try {
+    isSubbed = await verifySubscription(accessToken, claim.channel_id)
+  } catch (e) {
+    console.error('[yt-verify] verify subscription error', e)
+    return c.json({ error: 'VERIFY_ERROR', message: 'Error checking subscription' }, 500)
+  }
+
+  if (!isSubbed) {
+    // Increment attempts
+    await c.env.DB.prepare(
+      `UPDATE task_claims SET verify_attempts = verify_attempts + 1 WHERE id = ?`
+    ).bind(claimId).run()
+
+    const attempts = claim.verify_attempts + 1
+    if (attempts >= 2) {
+      await c.env.DB.prepare(
+        `UPDATE task_claims SET status = 'REJECTED' WHERE id = ?`
+      ).bind(claimId).run()
+      return c.json({ error: 'NOT_SUBSCRIBED', message: 'Subscription not found. Claim rejected.', rejected: true }, 400)
+    }
+    return c.json({ error: 'NOT_SUBSCRIBED', message: 'Subscription not found. Please subscribe and try again.', attempts }, 400)
+  }
+
+  // 6. Verify passed
+  const now = Math.floor(Date.now() / 1000)
+  await c.env.DB.prepare(`
+    UPDATE task_claims
+    SET status = 'VERIFIED', verified_at = ?, youtube_channel_id = ?
+    WHERE id = ?
+  `).bind(now, earnerChannelId, claimId).run()
+
+  // Credit coin pending
+  await creditXuPending(c.env.DB, claimId, userId, claim.xu_per_unit)
+
+  // Log IP
+  const ipHash = c.get('ipHash') ?? 'unknown'
+  const today = new Date().toISOString().slice(0, 10)
+  await c.env.DB.prepare(
+    `INSERT OR IGNORE INTO ip_task_log (ip_hash, channel_id, date_str) VALUES (?,?,?)`
+  ).bind(ipHash, claim.channel_id, today).run()
+
+  // Mark channel completed (hide from feed)
+  await c.env.DB.prepare(
+    `INSERT OR IGNORE INTO user_completed_channels (user_id, channel_id) VALUES (?,?)`
+  ).bind(userId, claim.channel_id).run()
+
+  // Increment task delivered_count
+  await c.env.DB.prepare(`
+    UPDATE tasks SET delivered_count = delivered_count + 1,
+      status = CASE WHEN delivered_count + 1 >= target_count THEN 'COMPLETED' ELSE status END
+    WHERE id = ?
+  `).bind(claim.task_id).run()
+
+  return c.json({ ok: true, coins_earned: claim.xu_per_unit })
 })
 
-async function incrementVerifyAttempts(db: D1Database, claimId: string) {
-  await db.prepare(`
-    UPDATE task_claims SET verify_attempts = verify_attempts + 1 WHERE id = ?
-  `).bind(claimId).run()
-}
+// POST /api/youtube-verify/:claimId/subscribe-and-verify
+// Platform subscribes on behalf of user using stored refresh token, then verifies
+youtubeVerifyRoutes.post('/:claimId/subscribe-and-verify', async (c) => {
+  const guard = requireAuth(c)
+  if (guard) return guard
+
+  const userId = c.get('userId')!
+  const claimId = c.req.param('claimId')
+  const { channel_id } = await c.req.json<{ channel_id?: string }>().catch(() => ({ channel_id: undefined }))
+
+  // 1. Get linked channel + refresh token
+  const channelRow = await c.env.DB.prepare(
+    channel_id
+      ? `SELECT channel_id, refresh_token FROM user_linked_channels WHERE user_id = ? AND channel_id = ?`
+      : `SELECT channel_id, refresh_token FROM user_linked_channels WHERE user_id = ? LIMIT 1`
+  ).bind(...(channel_id ? [userId, channel_id] : [userId])).first<{ channel_id: string; refresh_token: string }>()
+
+  if (!channelRow?.refresh_token) {
+    return c.json({ error: 'NO_YT_CHANNEL', message: 'No linked YouTube channel found' }, 400)
+  }
+
+  // 2. Load claim (must be CLAIMED or SUBMITTED)
+  const claim = await c.env.DB.prepare(`
+    SELECT tc.*, t.channel_id as target_channel_id, t.xu_per_unit, t.id as task_id
+    FROM task_claims tc
+    JOIN tasks t ON t.id = tc.task_id
+    WHERE tc.id = ? AND tc.claimer_id = ? AND tc.status IN ('CLAIMED','SUBMITTED')
+  `).bind(claimId, userId).first<{
+    id: string; task_id: string; claimer_id: string
+    target_channel_id: string; xu_per_unit: number
+    youtube_channel_id: string | null; verify_attempts: number; status: string
+  }>()
+
+  if (!claim) return c.json({ error: 'CLAIM_NOT_FOUND', message: 'Claim not found or already completed' }, 404)
+
+  // 3. Duplicate channel check
+  const earnerChannelId = channelRow.channel_id
+  const dupCheck = await c.env.DB.prepare(
+    `SELECT 1 FROM task_claims WHERE task_id = ? AND youtube_channel_id = ? AND id != ?`
+  ).bind(claim.task_id, earnerChannelId, claimId).first()
+  if (dupCheck) {
+    return c.json({ error: 'DUPLICATE_CHANNEL', message: 'This channel has already completed this task' }, 409)
+  }
+
+  // 4. Refresh access token
+  let accessToken: string
+  try {
+    accessToken = await refreshAccessToken(c.env.GOOGLE_CLIENT_ID, c.env.GOOGLE_CLIENT_SECRET, channelRow.refresh_token)
+  } catch {
+    return c.json({ error: 'TOKEN_REFRESH_FAILED', message: 'YouTube token expired. Please re-link your channel.' }, 401)
+  }
+
+  // 5. Subscribe (platform performs action on behalf of user)
+  const subResult = await subscribeToChannel(accessToken, claim.target_channel_id)
+  if (!subResult.ok) {
+    return c.json({ error: 'SUBSCRIBE_FAILED', message: `Failed to subscribe: ${subResult.error}` }, 400)
+  }
+
+  // 6. Verify subscription (confirm it went through)
+  const isSubbed = await verifySubscription(accessToken, claim.target_channel_id)
+  if (!isSubbed) {
+    return c.json({ error: 'VERIFY_FAILED', message: 'Subscribe appeared to succeed but subscription not confirmed. Try again.' }, 400)
+  }
+
+  // 7. Mark claim VERIFIED
+  const now = Math.floor(Date.now() / 1000)
+
+  // First ensure SUBMITTED state
+  if (claim.status === 'CLAIMED') {
+    await c.env.DB.prepare(`UPDATE task_claims SET status = 'SUBMITTED', submitted_at = ? WHERE id = ?`).bind(now, claimId).run()
+  }
+
+  await c.env.DB.prepare(`
+    UPDATE task_claims SET status = 'VERIFIED', verified_at = ?, youtube_channel_id = ? WHERE id = ?
+  `).bind(now, earnerChannelId, claimId).run()
+
+  await creditXuPending(c.env.DB, claimId, userId, claim.xu_per_unit)
+
+  const ipHash = c.get('ipHash') ?? 'unknown'
+  const today = new Date().toISOString().slice(0, 10)
+  await c.env.DB.prepare(`INSERT OR IGNORE INTO ip_task_log (ip_hash, channel_id, date_str) VALUES (?,?,?)`).bind(ipHash, claim.target_channel_id, today).run()
+  await c.env.DB.prepare(`INSERT OR IGNORE INTO user_completed_channels (user_id, channel_id) VALUES (?,?)`).bind(userId, claim.target_channel_id).run()
+  await c.env.DB.prepare(`
+    UPDATE tasks SET delivered_count = delivered_count + 1,
+      status = CASE WHEN delivered_count + 1 >= target_count THEN 'COMPLETED' ELSE status END
+    WHERE id = ?
+  `).bind(claim.task_id).run()
+
+  return c.json({ ok: true, coins_earned: claim.xu_per_unit })
+})
+
+// POST /api/youtube-verify/:claimId/perform
+// Unified perform endpoint for SUBSCRIBE, LIKE, COMMENT actions
+youtubeVerifyRoutes.post('/:claimId/perform', async (c) => {
+  const guard = requireAuth(c)
+  if (guard) return guard
+
+  const userId = c.get('userId')!
+  const claimId = c.req.param('claimId')
+  const body = await c.req.json<{ channel_id?: string }>().catch(() => ({} as { channel_id?: string }))
+
+  // 1. Get linked channel + refresh token
+  const channelRow = await c.env.DB.prepare(
+    body.channel_id
+      ? `SELECT channel_id, refresh_token FROM user_linked_channels WHERE user_id = ? AND channel_id = ?`
+      : `SELECT channel_id, refresh_token FROM user_linked_channels WHERE user_id = ? LIMIT 1`
+  ).bind(...(body.channel_id ? [userId, body.channel_id] : [userId])).first<{ channel_id: string; refresh_token: string }>()
+
+  if (!channelRow?.refresh_token) {
+    return c.json({ error: 'NO_YT_CHANNEL', message: 'No linked YouTube channel found' }, 400)
+  }
+
+  // 2. Load claim + task (must be CLAIMED or SUBMITTED)
+  const claim = await c.env.DB.prepare(`
+    SELECT tc.*, t.channel_id as target_channel_id, t.video_id, t.comment_template,
+           t.xu_per_unit, t.id as task_id, t.action_type
+    FROM task_claims tc
+    JOIN tasks t ON t.id = tc.task_id
+    WHERE tc.id = ? AND tc.claimer_id = ? AND tc.status IN ('CLAIMED','SUBMITTED')
+  `).bind(claimId, userId).first<{
+    id: string; task_id: string; claimer_id: string
+    target_channel_id: string; video_id: string | null; comment_template: string | null
+    xu_per_unit: number; youtube_channel_id: string | null; verify_attempts: number
+    status: string; action_type: string
+  }>()
+
+  if (!claim) return c.json({ error: 'CLAIM_NOT_FOUND', message: 'Claim not found or already completed' }, 404)
+
+  const earnerChannelId = channelRow.channel_id
+
+  // 3. Duplicate check
+  const dupCheck = await c.env.DB.prepare(
+    `SELECT 1 FROM task_claims WHERE task_id = ? AND youtube_channel_id = ? AND id != ?`
+  ).bind(claim.task_id, earnerChannelId, claimId).first()
+  if (dupCheck) {
+    return c.json({ error: 'DUPLICATE_CHANNEL', message: 'You have already completed this task with this channel' }, 409)
+  }
+
+  // 4. Refresh access token
+  let accessToken: string
+  try {
+    accessToken = await refreshAccessToken(c.env.GOOGLE_CLIENT_ID, c.env.GOOGLE_CLIENT_SECRET, channelRow.refresh_token)
+  } catch {
+    return c.json({ error: 'TOKEN_REFRESH_FAILED', message: 'YouTube token expired. Please re-link your channel.' }, 401)
+  }
+
+  // 5. Perform + verify action
+  const actionType = claim.action_type ?? 'SUBSCRIBE'
+  const now = Math.floor(Date.now() / 1000)
+
+  if (actionType === 'SUBSCRIBE') {
+    const subResult = await subscribeToChannel(accessToken, claim.target_channel_id)
+    if (!subResult.ok) {
+      return c.json({ error: 'ACTION_FAILED', message: `Subscribe failed: ${subResult.error}` }, 400)
+    }
+    const verified = await verifySubscription(accessToken, claim.target_channel_id)
+    if (!verified) {
+      return c.json({ error: 'VERIFY_FAILED', message: 'Subscription could not be confirmed. Try again.' }, 400)
+    }
+    if (claim.status === 'CLAIMED') {
+      await c.env.DB.prepare(`UPDATE task_claims SET status = 'SUBMITTED', submitted_at = ? WHERE id = ?`).bind(now, claimId).run()
+    }
+    await c.env.DB.prepare(`UPDATE task_claims SET status = 'VERIFIED', verified_at = ?, youtube_channel_id = ? WHERE id = ?`).bind(now, earnerChannelId, claimId).run()
+    await c.env.DB.prepare(`INSERT OR IGNORE INTO user_completed_channels (user_id, channel_id) VALUES (?,?)`).bind(userId, claim.target_channel_id).run()
+
+  } else if (actionType === 'LIKE') {
+    const videoId = claim.video_id!
+    const likeResult = await likeVideo(accessToken, videoId)
+    if (!likeResult.ok) {
+      return c.json({ error: 'ACTION_FAILED', message: `Like failed: ${likeResult.error}` }, 400)
+    }
+    const verified = await verifyLike(accessToken, videoId)
+    if (!verified) {
+      return c.json({ error: 'VERIFY_FAILED', message: 'Like could not be confirmed. Try again.' }, 400)
+    }
+    if (claim.status === 'CLAIMED') {
+      await c.env.DB.prepare(`UPDATE task_claims SET status = 'SUBMITTED', submitted_at = ? WHERE id = ?`).bind(now, claimId).run()
+    }
+    await c.env.DB.prepare(`UPDATE task_claims SET status = 'VERIFIED', verified_at = ?, youtube_channel_id = ? WHERE id = ?`).bind(now, earnerChannelId, claimId).run()
+    await c.env.DB.prepare(`INSERT OR IGNORE INTO task_claim_results (claim_id, rating) VALUES (?,?)`).bind(claimId, 'like').run()
+
+  } else if (actionType === 'COMMENT') {
+    const videoId = claim.video_id!
+    const commentText = claim.comment_template ?? 'Great video!'
+    const commentResult = await postComment(accessToken, videoId, commentText)
+    if (!commentResult.ok) {
+      return c.json({ error: 'ACTION_FAILED', message: `Comment failed: ${commentResult.error}` }, 400)
+    }
+    const verified = commentResult.comment_id
+      ? await verifyComment(accessToken, commentResult.comment_id)
+      : false
+    if (!verified) {
+      return c.json({ error: 'VERIFY_FAILED', message: 'Comment could not be confirmed. Try again.' }, 400)
+    }
+    if (claim.status === 'CLAIMED') {
+      await c.env.DB.prepare(`UPDATE task_claims SET status = 'SUBMITTED', submitted_at = ? WHERE id = ?`).bind(now, claimId).run()
+    }
+    await c.env.DB.prepare(`UPDATE task_claims SET status = 'VERIFIED', verified_at = ?, youtube_channel_id = ? WHERE id = ?`).bind(now, earnerChannelId, claimId).run()
+    await c.env.DB.prepare(`INSERT OR IGNORE INTO task_claim_results (claim_id, comment_id) VALUES (?,?)`).bind(claimId, commentResult.comment_id ?? '').run()
+  }
+
+  // 6. Credit coins + common bookkeeping
+  await creditXuPending(c.env.DB, claimId, userId, claim.xu_per_unit)
+  const ipHash = c.get('ipHash') ?? 'unknown'
+  const today = new Date().toISOString().slice(0, 10)
+  await c.env.DB.prepare(`INSERT OR IGNORE INTO ip_task_log (ip_hash, channel_id, date_str) VALUES (?,?,?)`).bind(ipHash, claim.target_channel_id, today).run()
+  await c.env.DB.prepare(`UPDATE tasks SET delivered_count = delivered_count + 1, status = CASE WHEN delivered_count + 1 >= target_count THEN 'COMPLETED' ELSE status END WHERE id = ?`).bind(claim.task_id).run()
+
+  return c.json({ ok: true, coins_earned: claim.xu_per_unit, action_type: actionType })
+})
