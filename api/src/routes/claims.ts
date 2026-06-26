@@ -147,14 +147,14 @@ claimRoutes.post('/:claimId/submit', async (c) => {
   const now = Math.floor(Date.now() / 1000)
 
   const claim = await c.env.DB.prepare(`
-    SELECT tc.*, t.channel_id, t.channel_url, t.xu_per_unit, t.task_type
+    SELECT tc.*, t.channel_id, t.channel_url, t.coin_per_unit, t.task_type
     FROM task_claims tc
     JOIN tasks t ON t.id = tc.task_id
     WHERE tc.id = ? AND tc.claimer_id = ?
   `).bind(claimId, userId).first<{
     id: string; task_id: string; claimer_id: string; claimer_ip_hash: string;
     must_submit_after: number; status: string; verify_attempts: number;
-    channel_id: string; channel_url: string; xu_per_unit: number; task_type: string;
+    channel_id: string; channel_url: string; coin_per_unit: number; task_type: string;
   }>()
 
   if (!claim) return c.json({ error: 'CLAIM_NOT_FOUND', message: 'Claim not found' }, 404)
@@ -180,7 +180,7 @@ claimRoutes.get('/my', async (c) => {
 
   const userId = c.get('userId')!
   const claims = await c.env.DB.prepare(`
-    SELECT tc.*, t.channel_id, t.channel_url, t.channel_name, t.task_type, t.xu_per_unit, t.action_type
+    SELECT tc.*, t.channel_id, t.channel_url, t.channel_name, t.task_type, t.coin_per_unit, t.action_type
     FROM task_claims tc
     JOIN tasks t ON t.id = tc.task_id
     WHERE tc.claimer_id = ?

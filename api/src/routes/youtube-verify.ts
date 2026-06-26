@@ -3,7 +3,7 @@ import type { Env } from '../bindings'
 import type { HonoVariables } from '../types'
 import { requireAuth } from '../middleware/auth'
 import { verifySubscription, refreshAccessToken, subscribeToChannel, likeVideo, verifyLike, postComment, verifyComment } from '../lib/youtube'
-import { creditXuPending } from '../lib/xu'
+import { creditCoinPending } from '../lib/xu'
 
 export const youtubeVerifyRoutes = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
 
@@ -34,13 +34,13 @@ youtubeVerifyRoutes.post('/:claimId', async (c) => {
 
   // 2. Load claim — must be SUBMITTED and owned by user
   const claim = await c.env.DB.prepare(`
-    SELECT tc.*, t.channel_id, t.xu_per_unit, t.id as task_id
+    SELECT tc.*, t.channel_id, t.coin_per_unit, t.id as task_id
     FROM task_claims tc
     JOIN tasks t ON t.id = tc.task_id
     WHERE tc.id = ? AND tc.claimer_id = ? AND tc.status = 'SUBMITTED'
   `).bind(claimId, userId).first<{
     id: string; task_id: string; claimer_id: string
-    channel_id: string; xu_per_unit: number
+    channel_id: string; coin_per_unit: number
     youtube_channel_id: string | null; verify_attempts: number
   }>()
 
@@ -97,7 +97,7 @@ youtubeVerifyRoutes.post('/:claimId', async (c) => {
   `).bind(now, earnerChannelId, claimId).run()
 
   // Credit coin pending
-  await creditXuPending(c.env.DB, claimId, userId, claim.xu_per_unit)
+  await creditCoinPending(c.env.DB, claimId, userId, claim.coin_per_unit)
 
   // Log IP
   const ipHash = c.get('ipHash') ?? 'unknown'
@@ -118,7 +118,7 @@ youtubeVerifyRoutes.post('/:claimId', async (c) => {
     WHERE id = ?
   `).bind(claim.task_id).run()
 
-  return c.json({ ok: true, coins_earned: claim.xu_per_unit })
+  return c.json({ ok: true, coins_earned: claim.coin_per_unit })
 })
 
 // POST /api/youtube-verify/:claimId/subscribe-and-verify
@@ -144,13 +144,13 @@ youtubeVerifyRoutes.post('/:claimId/subscribe-and-verify', async (c) => {
 
   // 2. Load claim (must be CLAIMED or SUBMITTED)
   const claim = await c.env.DB.prepare(`
-    SELECT tc.*, t.channel_id as target_channel_id, t.xu_per_unit, t.id as task_id
+    SELECT tc.*, t.channel_id as target_channel_id, t.coin_per_unit, t.id as task_id
     FROM task_claims tc
     JOIN tasks t ON t.id = tc.task_id
     WHERE tc.id = ? AND tc.claimer_id = ? AND tc.status IN ('CLAIMED','SUBMITTED')
   `).bind(claimId, userId).first<{
     id: string; task_id: string; claimer_id: string
-    target_channel_id: string; xu_per_unit: number
+    target_channel_id: string; coin_per_unit: number
     youtube_channel_id: string | null; verify_attempts: number; status: string
   }>()
 
@@ -197,7 +197,7 @@ youtubeVerifyRoutes.post('/:claimId/subscribe-and-verify', async (c) => {
     UPDATE task_claims SET status = 'VERIFIED', verified_at = ?, youtube_channel_id = ? WHERE id = ?
   `).bind(now, earnerChannelId, claimId).run()
 
-  await creditXuPending(c.env.DB, claimId, userId, claim.xu_per_unit)
+  await creditCoinPending(c.env.DB, claimId, userId, claim.coin_per_unit)
 
   const ipHash = c.get('ipHash') ?? 'unknown'
   const today = new Date().toISOString().slice(0, 10)
@@ -209,7 +209,7 @@ youtubeVerifyRoutes.post('/:claimId/subscribe-and-verify', async (c) => {
     WHERE id = ?
   `).bind(claim.task_id).run()
 
-  return c.json({ ok: true, coins_earned: claim.xu_per_unit })
+  return c.json({ ok: true, coins_earned: claim.coin_per_unit })
 })
 
 // POST /api/youtube-verify/:claimId/perform
@@ -236,14 +236,14 @@ youtubeVerifyRoutes.post('/:claimId/perform', async (c) => {
   // 2. Load claim + task (must be CLAIMED or SUBMITTED)
   const claim = await c.env.DB.prepare(`
     SELECT tc.*, t.channel_id as target_channel_id, t.video_id, t.comment_template,
-           t.xu_per_unit, t.id as task_id, t.action_type
+           t.coin_per_unit, t.id as task_id, t.action_type
     FROM task_claims tc
     JOIN tasks t ON t.id = tc.task_id
     WHERE tc.id = ? AND tc.claimer_id = ? AND tc.status IN ('CLAIMED','SUBMITTED')
   `).bind(claimId, userId).first<{
     id: string; task_id: string; claimer_id: string
     target_channel_id: string; video_id: string | null; comment_template: string | null
-    xu_per_unit: number; youtube_channel_id: string | null; verify_attempts: number
+    coin_per_unit: number; youtube_channel_id: string | null; verify_attempts: number
     status: string; action_type: string
   }>()
 
@@ -323,11 +323,11 @@ youtubeVerifyRoutes.post('/:claimId/perform', async (c) => {
   }
 
   // 6. Credit coins + common bookkeeping
-  await creditXuPending(c.env.DB, claimId, userId, claim.xu_per_unit)
+  await creditCoinPending(c.env.DB, claimId, userId, claim.coin_per_unit)
   const ipHash = c.get('ipHash') ?? 'unknown'
   const today = new Date().toISOString().slice(0, 10)
   await c.env.DB.prepare(`INSERT OR IGNORE INTO ip_task_log (ip_hash, channel_id, date_str) VALUES (?,?,?)`).bind(ipHash, claim.target_channel_id, today).run()
   await c.env.DB.prepare(`UPDATE tasks SET delivered_count = delivered_count + 1, status = CASE WHEN delivered_count + 1 >= target_count THEN 'COMPLETED' ELSE status END WHERE id = ?`).bind(claim.task_id).run()
 
-  return c.json({ ok: true, coins_earned: claim.xu_per_unit, action_type: actionType })
+  return c.json({ ok: true, coins_earned: claim.coin_per_unit, action_type: actionType })
 })

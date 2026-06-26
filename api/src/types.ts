@@ -4,9 +4,9 @@
 export type TaskType = 'PAY' | 'CROSS_SUB'
 export type TaskStatus = 'OPEN' | 'FILLING' | 'COMPLETED' | 'CANCELLED' | 'EXPIRED'
 export type ClaimStatus = 'CLAIMED' | 'SUBMITTED' | 'VERIFIED' | 'REJECTED' | 'EXPIRED'
-export type XuStatus = 'NONE' | 'PENDING' | 'LOCKED' | 'CREDITED' | 'CLAWED_BACK'
-export type TxnType = 'EARN' | 'SPEND' | 'BUY_VND' | 'BUY_XU' | 'CLAW_BACK' | 'REFUND' | 'ESCROW_LOCK' | 'ESCROW_RELEASE'
-export type Currency = 'VND' | 'XU'
+export type CoinStatus = 'NONE' | 'PENDING' | 'LOCKED' | 'CREDITED' | 'CLAWED_BACK'
+export type TxnType = 'EARN' | 'SPEND' | 'BUY_USD' | 'BUY_COIN' | 'CLAW_BACK' | 'REFUND' | 'ESCROW_LOCK' | 'ESCROW_RELEASE'
+export type Currency = 'USD' | 'COIN'
 
 export interface User {
   id: string
@@ -19,9 +19,9 @@ export interface User {
 
 export interface Wallet {
   user_id: string
-  balance_vnd: number
-  xu_balance: number
-  xu_pending: number
+  coin_balance: number
+  coin_pending: number
+  balance_usd_micro: number
 }
 
 export interface Task {
@@ -34,10 +34,10 @@ export interface Task {
   target_count: number
   delivered_count: number
   task_type: TaskType
-  price_per_unit_vnd: number
-  xu_per_unit: number
-  escrow_vnd: number
-  escrow_xu: number
+  price_per_unit_usd_micro: number
+  coin_per_unit: number
+  escrow_usd_micro: number
+  escrow_coin: number
   max_providers: number
   priority: number
   status: TaskStatus
@@ -55,9 +55,9 @@ export interface TaskClaim {
   submitted_at: number | null
   verified_at: number | null
   youtube_channel_id: string | null
-  xu_status: XuStatus
-  xu_amount: number
-  xu_locked_at: number | null
+  coin_status: CoinStatus
+  coin_amount: number
+  coin_locked_at: number | null
   verify_attempts: number
   status: ClaimStatus
 }
