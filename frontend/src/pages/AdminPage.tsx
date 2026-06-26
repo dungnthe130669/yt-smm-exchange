@@ -23,13 +23,13 @@ interface AdminUser {
 
 interface AdminTask {
   id: string; channel_name: string | null; channel_id: string
-  task_type: string; status: string; target_count: number; delivered_count: number
+  action_type: string; task_type: string; status: string; target_count: number; delivered_count: number
   buyer_email: string; created_at: number; price_per_unit_usd_micro: number; coin_per_unit: number
 }
 
 interface AdminClaim {
   id: string; task_id: string; claimer_email: string
-  channel_name: string | null; task_type: string
+  channel_name: string | null; action_type: string
   status: string; claimed_at: number; coin_amount: number
   youtube_channel_id: string | null
 }
@@ -259,7 +259,7 @@ function TasksTab() {
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                {['Channel', 'Type', 'Status', 'Progress', 'Buyer', 'Date', 'Action'].map(h => (
+                {['Channel', 'Action', 'Status', 'Progress', 'Buyer', 'Date', 'Action'].map(h => (
                   <th key={h} className="px-4 py-2.5 text-left text-xs font-medium" style={{ color: 'var(--color-muted)' }}>{h}</th>
                 ))}
               </tr>
@@ -268,7 +268,7 @@ function TasksTab() {
               {data?.tasks.map(t => (
                 <tr key={t.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
                   <td className="px-4 py-2.5 font-medium max-w-[140px] truncate">{t.channel_name ?? t.channel_id.slice(0, 12)}</td>
-                  <td className="px-4 py-2.5"><span className="badge badge-gray">{t.task_type}</span></td>
+                  <td className="px-4 py-2.5"><span className="badge" style={{ background: t.action_type === 'SUBSCRIBE' ? 'orange' : t.action_type === 'LIKE' ? 'var(--color-danger)' : '#818cf8', color: '#fff' }}>{t.action_type}</span></td>
                   <td className="px-4 py-2.5"><span className="badge badge-gray">{t.status}</span></td>
                   <td className="px-4 py-2.5 mono text-xs">{t.delivered_count}/{t.target_count}</td>
                   <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--color-muted)' }}>{t.buyer_email}</td>
@@ -346,7 +346,7 @@ function ClaimsTab() {
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                {['Claimer', 'Channel', 'Type', 'Status', 'Coins', 'Date', 'Action'].map(h => (
+                {['Claimer', 'Channel', 'Action', 'Status', 'Coins', 'Date', 'Action'].map(h => (
                   <th key={h} className="px-4 py-2.5 text-left text-xs font-medium" style={{ color: 'var(--color-muted)' }}>{h}</th>
                 ))}
               </tr>
@@ -356,7 +356,7 @@ function ClaimsTab() {
                 <tr key={cl.id} style={{ borderBottom: '1px solid var(--color-border)' }}>
                   <td className="px-4 py-2.5 text-xs font-medium">{cl.claimer_email}</td>
                   <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--color-muted)' }}>{cl.channel_name ?? '—'}</td>
-                  <td className="px-4 py-2.5"><span className="badge badge-gray">{cl.task_type}</span></td>
+                  <td className="px-4 py-2.5"><span className="badge" style={{ background: cl.action_type === 'SUBSCRIBE' ? 'orange' : cl.action_type === 'LIKE' ? 'var(--color-danger)' : '#818cf8', color: '#fff' }}>{cl.action_type}</span></td>
                   <td className="px-4 py-2.5"><span className="badge badge-gray">{cl.status}</span></td>
                   <td className="px-4 py-2.5 mono text-xs">{cl.coin_amount}</td>
                   <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--color-muted)' }}>
@@ -394,11 +394,10 @@ function ClaimsTab() {
 // ─── Pricing Tab ──────────────────────────────────────────────────────────────
 
 const PRICING_FIELDS = [
-  { key: 'xu_per_subscribe',     label: 'Coin reward — Subscribe' },
-  { key: 'xu_per_like',          label: 'Coin reward — Like' },
-  { key: 'xu_per_comment',       label: 'Coin reward — Comment' },
-  { key: 'xu_per_unit_cross',    label: 'Coin reward — Cross-sub (coin_per_unit_cross)' },
-  { key: 'cooldown_seconds',     label: 'Per-task cooldown (seconds)' },
+  { key: 'xu_per_subscribe',      label: 'Coin reward — Subscribe (coin/task)' },
+  { key: 'xu_per_like',           label: 'Coin reward — Like (coin/task)' },
+  { key: 'xu_per_comment',        label: 'Coin reward — Comment (coin/task)' },
+  { key: 'cooldown_seconds',      label: 'Claim cooldown (seconds, 0 = instant)' },
   { key: 'task_cooldown_seconds', label: 'Between-task cooldown (seconds)' },
 ] as const
 
@@ -452,7 +451,7 @@ function PricingTab() {
   return (
     <div className="card p-6 flex flex-col gap-5 max-w-md">
       <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-        These prices apply to all new tasks. Existing tasks are unaffected.
+        These coin rewards apply to all new tasks. Existing tasks are unaffected. Coins are earned by completing tasks — not purchased.
       </p>
 
       {PRICING_FIELDS.map(({ key, label }) => (

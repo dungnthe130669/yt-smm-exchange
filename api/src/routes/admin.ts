@@ -14,7 +14,7 @@ adminRoutes.get('/stats', async (c) => {
     c.env.DB.prepare(`SELECT COUNT(*) as cnt FROM "user"`).first<{ cnt: number }>(),
     c.env.DB.prepare(`SELECT COUNT(*) as cnt, status FROM tasks GROUP BY status`).all<{ cnt: number; status: string }>(),
     c.env.DB.prepare(`SELECT COUNT(*) as cnt, status FROM task_claims GROUP BY status`).all<{ cnt: number; status: string }>(),
-    c.env.DB.prepare(`SELECT SUM(coin_balance) as total_coin, SUM(coin_pending) as total_pending FROM wallets`).first<{ total_coin: number; total_pending: number }>(),
+    c.env.DB.prepare(`SELECT SUM(coin_balance) as total_coin, SUM(coin_pending) as total_coin_pending FROM wallets`).first<{ total_coin: number; total_coin_pending: number }>(),
   ])
 
   return c.json({
@@ -89,9 +89,11 @@ adminRoutes.get('/tasks', async (c) => {
 
   const [rows, total] = await Promise.all([
     c.env.DB.prepare(`
-      SELECT t.*, u.email as buyer_email
-      FROM tasks t
-      LEFT JOIN "user" u ON u.id = t.buyer_id
+      SELECT t.id, t.buyer_id, t.channel_name, t.channel_id, t.action_type,
+             t.task_type, t.status, t.target_count, t.delivered_count,
+             t.coin_per_unit, t.created_at, t.deadline,
+             u.email as buyer_email
+      FROM tasks t LEFT JOIN "user" u ON u.id = t.buyer_id
       ${whereClause}
       ORDER BY t.created_at DESC
       LIMIT ? OFFSET ?
@@ -133,7 +135,7 @@ adminRoutes.get('/claims', async (c) => {
 
   const [rows, total] = await Promise.all([
     c.env.DB.prepare(`
-      SELECT tc.*, u.email as claimer_email, t.channel_name, t.task_type
+      SELECT tc.*, u.email as claimer_email, t.channel_name, t.action_type
       FROM task_claims tc
       LEFT JOIN "user" u ON u.id = tc.claimer_id
       LEFT JOIN tasks t ON t.id = tc.task_id
@@ -154,18 +156,11 @@ adminRoutes.get('/pricing', async (c) => {
   if (guard) return guard
   const raw = await c.env.RATE_KV.get('pricing_config')
   const defaults = {
-    pay_price_per_unit_vnd: 5,
-    xu_per_unit_pay: 10,
-    xu_per_unit_cross: 14,   // legacy key — keep for backward compat
-    coin_per_unit_cross: 14, // new key
-    cooldown_seconds: 0,
-    task_cooldown_seconds: 30,
     xu_per_subscribe: 10,
     xu_per_like: 5,
     xu_per_comment: 15,
-    pay_per_subscribe_vnd: 5,
-    pay_per_like_vnd: 3,
-    pay_per_comment_vnd: 8,
+    cooldown_seconds: 0,
+    task_cooldown_seconds: 30,
   }
   const config = raw ? { ...defaults, ...JSON.parse(raw) } : defaults
   return c.json(config)
@@ -177,18 +172,11 @@ adminRoutes.put('/pricing', async (c) => {
   if (guard) return guard
   const body = await c.req.json<Record<string, unknown>>()
   const defaults = {
-    pay_price_per_unit_vnd: 5,
-    xu_per_unit_pay: 10,
-    xu_per_unit_cross: 14,   // legacy key — keep for backward compat
-    coin_per_unit_cross: 14, // new key
-    cooldown_seconds: 0,
-    task_cooldown_seconds: 30,
     xu_per_subscribe: 10,
     xu_per_like: 5,
     xu_per_comment: 15,
-    pay_per_subscribe_vnd: 5,
-    pay_per_like_vnd: 3,
-    pay_per_comment_vnd: 8,
+    cooldown_seconds: 0,
+    task_cooldown_seconds: 30,
   }
   const merged = { ...defaults, ...body }
   if (typeof merged.cooldown_seconds !== 'number' || merged.cooldown_seconds < 0) {
