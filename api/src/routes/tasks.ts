@@ -158,6 +158,19 @@ taskRoutes.post('/', async (c) => {
   const channelId = actionType === 'SUBSCRIBE' ? body.channel_id! : (body.video_id!)
   const channelUrl = actionType === 'SUBSCRIBE' ? body.channel_url! : `https://youtube.com/watch?v=${body.video_id}`
 
+  // Validate SUBSCRIBE channel exists on YouTube API
+  if (actionType === 'SUBSCRIBE' && c.env.YOUTUBE_API_KEY) {
+    const chkUrl = new URL('https://www.googleapis.com/youtube/v3/channels')
+    chkUrl.searchParams.set('part', 'id')
+    chkUrl.searchParams.set('id', channelId)
+    chkUrl.searchParams.set('key', c.env.YOUTUBE_API_KEY)
+    const chkRes = await fetch(chkUrl.toString())
+    const chkData = await chkRes.json<{ items?: Array<{ id: string }> }>()
+    if (!chkData.items?.length) {
+      return c.json({ error: 'CHANNEL_NOT_FOUND', message: 'YouTube channel not found. Make sure you selected a valid channel.' }, 400)
+    }
+  }
+
   if (!Number.isFinite(body.target_count) || body.target_count < 1 || body.target_count > 50) {
     return c.json({ error: 'INVALID_COUNT', message: 'Invalid target count (must be 1–50)' }, 400)
   }

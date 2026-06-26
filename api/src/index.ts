@@ -91,6 +91,62 @@ app.get('/api/debug/refresh-test', async (c) => {
   }
 })
 
+// TEMP DEBUG: test subscribe call raw — REMOVE BEFORE PROD LAUNCH
+app.get('/api/debug/subscribe-test', async (c) => {
+  const earnerChannelId = c.req.query('earner_channel_id')
+  const targetChannelId = c.req.query('target_channel_id')
+  if (!earnerChannelId || !targetChannelId) {
+    return c.json({ error: 'earner_channel_id and target_channel_id required' }, 400)
+  }
+  const row = await c.env.DB.prepare(
+    `SELECT refresh_token FROM user_linked_channels WHERE channel_id = ? LIMIT 1`
+  ).bind(earnerChannelId).first<{ refresh_token: string }>()
+  if (!row) return c.json({ error: 'earner channel not found' }, 404)
+
+  // Refresh token
+  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: c.env.GOOGLE_CLIENT_ID,
+      client_secret: c.env.GOOGLE_CLIENT_SECRET,
+      refresh_token: row.refresh_token,
+      grant_type: 'refresh_token',
+    }),
+  })
+  const tokenData = await tokenRes.json<{ access_token?: string; error?: string }>()
+  if (!tokenData.access_token) return c.json({ step: 'refresh', error: tokenData.error }, 400)
+
+  // Check target channel exists via YouTube API
+  const chkUrl = new URL('https://www.googleapis.com/youtube/v3/channels')
+  chkUrl.searchParams.set('part', 'id,snippet')
+  chkUrl.searchParams.set('id', targetChannelId)
+  const chkRes = await fetch(chkUrl.toString(), {
+    headers: { Authorization: `Bearer ${tokenData.access_token}` },
+  })
+  const chkData = await chkRes.json<{ items?: Array<{ id: string; snippet: { title: string } }> }>()
+  const channelExists = (chkData.items?.length ?? 0) > 0
+  const channelTitle = chkData.items?.[0]?.snippet?.title ?? null
+
+  // Attempt subscribe
+  const subRes = await fetch('https://www.googleapis.com/youtube/v3/subscriptions?part=snippet', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${tokenData.access_token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      snippet: { resourceId: { kind: 'youtube#channel', channelId: targetChannelId } },
+    }),
+  })
+  const subData = await subRes.json<Record<string, unknown>>()
+
+  return c.json({
+    target_channel_id: targetChannelId,
+    channel_exists_via_api: channelExists,
+    channel_title: channelTitle,
+    subscribe_status: subRes.status,
+    subscribe_response: subData,
+  })
+})
+
 // 404 fallback
 app.notFound((c) => c.json({ error: 'NOT_FOUND', message: 'Route not found' }, 404))
 
