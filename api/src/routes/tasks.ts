@@ -6,7 +6,6 @@ import { requireAuth } from '../middleware/auth'
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const MAX_TASKS_PER_ACCOUNT_DAY = 8   // earner: max claims per day
-const MAX_TASKS_PER_IP_DAY = 3        // IP-level daily cap
 const MAX_CONCURRENT_CLAIMS = 3       // max active (uncompleted) claims per user
 const DELAY_MIN_SEC = 20 * 60         // 20 min minimum delay before submit
 const DELAY_MAX_SEC = 45 * 60         // 45 min maximum delay

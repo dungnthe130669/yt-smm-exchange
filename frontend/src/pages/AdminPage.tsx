@@ -514,11 +514,13 @@ function ClaimsTab() {
 // ─── Pricing Tab ──────────────────────────────────────────────────────────────
 
 const PRICING_FIELDS = [
-  { key: 'coin_per_subscribe',    label: 'Coin reward — Subscribe', unit: 'coins/task' },
-  { key: 'coin_per_like',         label: 'Coin reward — Like',      unit: 'coins/task' },
-  { key: 'coin_per_comment',      label: 'Coin reward — Comment',   unit: 'coins/task' },
-  { key: 'cooldown_seconds',      label: 'Claim → verify cooldown', unit: 'seconds' },
-  { key: 'task_cooldown_seconds', label: 'Between-task cooldown',   unit: 'seconds' },
+  { key: 'coin_per_subscribe',       label: 'Coin reward — Subscribe',        unit: 'coins/task' },
+  { key: 'coin_per_like',            label: 'Coin reward — Like',             unit: 'coins/task' },
+  { key: 'coin_per_comment',         label: 'Coin reward — Comment',          unit: 'coins/task' },
+  { key: 'cooldown_seconds',         label: 'Claim → verify cooldown',        unit: 'seconds' },
+  { key: 'task_cooldown_seconds',    label: 'Between-task cooldown',          unit: 'seconds' },
+  { key: 'max_tasks_per_ip_day',     label: 'IP daily claim limit',           unit: '0 = disabled' },
+  { key: 'max_tasks_per_account_day',label: 'Account daily claim limit',      unit: 'tasks/day' },
 ] as const
 
 type PricingKey = typeof PRICING_FIELDS[number]['key']

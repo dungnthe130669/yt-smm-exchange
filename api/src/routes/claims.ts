@@ -4,7 +4,6 @@ import type { HonoVariables } from '../types'
 import { requireAuth } from '../middleware/auth'
 
 const MAX_TASKS_PER_ACCOUNT_DAY = 8
-const MAX_TASKS_PER_IP_DAY = 3
 const MAX_CONCURRENT_CLAIMS = 3
 
 export const claimRoutes = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
@@ -47,10 +46,13 @@ claimRoutes.post('/:taskId/claim', async (c) => {
     return c.json({ error: 'IP_CHANNEL_DUPLICATE', message: 'This IP has already subscribed to this channel' }, 429)
   }
 
-  // 2. IP daily limit (KV — fast)
+  // 2. IP daily limit (KV — configurable via admin pricing, 0 = disabled)
   const ipDailyKey = `ip:${ipHash}:${today}`
   const ipDailyCount = parseInt((await c.env.RATE_KV.get(ipDailyKey)) ?? '0')
-  if (ipDailyCount >= MAX_TASKS_PER_IP_DAY) {
+  const pricingRaw = await c.env.RATE_KV.get('pricing_config')
+  const pricing = pricingRaw ? JSON.parse(pricingRaw) : {}
+  const maxIpPerDay: number = pricing.max_tasks_per_ip_day ?? 0  // 0 = disabled
+  if (maxIpPerDay > 0 && ipDailyCount >= maxIpPerDay) {
     return c.json({ error: 'IP_DAILY_LIMIT', message: 'IP daily task limit reached' }, 429)
   }
 
@@ -60,7 +62,7 @@ claimRoutes.post('/:taskId/claim', async (c) => {
     `SELECT COUNT(*) as cnt FROM task_claims
      WHERE claimer_id = ? AND claimed_at >= ? AND status NOT IN ('REJECTED','EXPIRED')`
   ).bind(userId, todayStart).first<{ cnt: number }>()
-  if ((accountDaily?.cnt ?? 0) >= MAX_TASKS_PER_ACCOUNT_DAY) {
+  if ((accountDaily?.cnt ?? 0) >= (pricing.max_tasks_per_account_day ?? MAX_TASKS_PER_ACCOUNT_DAY) ) {
     return c.json({ error: 'ACCOUNT_DAILY_LIMIT', message: 'Daily task limit reached' }, 429)
   }
 
@@ -93,8 +95,6 @@ claimRoutes.post('/:taskId/claim', async (c) => {
 
   const claimId = crypto.randomUUID()
   const now = Math.floor(Date.now() / 1000)
-  const pricingRaw = await c.env.RATE_KV.get('pricing_config')
-  const pricing = pricingRaw ? JSON.parse(pricingRaw) : {}
   const taskCooldown = pricing.task_cooldown_seconds ?? 30
   const claimDelay = pricing.cooldown_seconds ?? 0
 

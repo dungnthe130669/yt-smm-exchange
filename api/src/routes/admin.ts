@@ -161,6 +161,8 @@ adminRoutes.get('/pricing', async (c) => {
     coin_per_comment: 15,
     cooldown_seconds: 0,
     task_cooldown_seconds: 30,
+    max_tasks_per_ip_day: 0,
+    max_tasks_per_account_day: 8,
   }
   const config = raw ? { ...defaults, ...JSON.parse(raw) } : defaults
   return c.json(config)
@@ -177,6 +179,8 @@ adminRoutes.put('/pricing', async (c) => {
     coin_per_comment: 15,
     cooldown_seconds: 0,
     task_cooldown_seconds: 30,
+    max_tasks_per_ip_day: 0,
+    max_tasks_per_account_day: 8,
   }
   const merged = { ...defaults, ...body }
   if (typeof merged.cooldown_seconds !== 'number' || merged.cooldown_seconds < 0) {
