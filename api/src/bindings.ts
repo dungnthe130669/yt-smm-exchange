@@ -14,8 +14,13 @@ export interface Env {
   GOOGLE_CLIENT_SECRET: string
   YOUTUBE_API_KEY: string  // public key for channels.list polling
 
+  // Confirmo payment gateway (may not be set in dev)
+  CONFIRMO_API_KEY: string
+  CONFIRMO_WEBHOOK_SECRET: string
+
   // Vars
   ENVIRONMENT: 'development' | 'production'
   APP_URL: string
+  API_BASE_URL?: string
   YOUTUBE_QUOTA_PROJECT: string
 }

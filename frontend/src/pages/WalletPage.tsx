@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import { ArrowUp, ArrowDown, ArrowsLeftRight } from '@phosphor-icons/react'
+import { useEffect, useRef, useState } from 'react'
+import { ArrowUp, ArrowDown, ArrowsLeftRight, CheckCircle, Warning } from '@phosphor-icons/react'
 import { api } from '../lib/api'
 import type { Wallet, WalletTxn } from '../types'
 import { WalletBar } from '../components/wallet/WalletBar'
@@ -20,6 +21,129 @@ function formatDate(ts: number) {
   return new Date(ts * 1000).toLocaleDateString('en-US', {
     day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
   })
+}
+
+const COIN_PER_USD = 100 // default; mirrors KV default
+
+function DepositPanel() {
+  const [amountUsd, setAmountUsd] = useState<string>('')
+  const [loading, setLoading] = useState(false)
+  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [coinPerUsd, setCoinPerUsd] = useState<number>(COIN_PER_USD)
+
+  // Fetch actual rate from pricing endpoint on mount
+  useEffect(() => {
+    api.get<{ coin_per_usd?: number; [key: string]: unknown }>('/tasks/pricing')
+      .then(pricing => {
+        if (typeof pricing.coin_per_usd === 'number') {
+          setCoinPerUsd(pricing.coin_per_usd)
+        }
+      })
+      .catch(() => { /* keep default */ })
+  }, [])
+
+  const showToast = (msg: string, ok: boolean) => {
+    setToast({ msg, ok })
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToast(null), 5000)
+  }
+
+  // Check ?deposit=success on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('deposit') === 'success') {
+      showToast('Payment submitted! Coins will be credited after confirmation.', true)
+      // Clean URL
+      const url = new URL(window.location.href)
+      url.searchParams.delete('deposit')
+      window.history.replaceState({}, '', url.toString())
+    }
+    return () => {
+      if (toastTimer.current) clearTimeout(toastTimer.current)
+    }
+  }, [])
+
+  const parsed = parseFloat(amountUsd)
+  const validAmount = !isNaN(parsed) && parsed >= 1 && parsed <= 500
+  const coinPreview = validAmount ? Math.floor(parsed * coinPerUsd) : null
+
+  const handleDeposit = async () => {
+    if (!validAmount) return
+    setLoading(true)
+    try {
+      const res = await api.post<{ checkout_url: string; invoice_id: string; coin_amount: number }>(
+        '/wallet/deposit',
+        { amount_usd: parsed }
+      )
+      if (res.checkout_url) {
+        window.location.href = res.checkout_url
+      } else {
+        showToast('No checkout URL returned from payment gateway.', false)
+      }
+    } catch (err: unknown) {
+      const errObj = err as Record<string, unknown>
+      const msg = typeof errObj?.error === 'string'
+        ? errObj.error
+        : 'Payment request failed. Please try again.'
+      showToast(msg, false)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <FadeUp delay={0.08}>
+      <div className="card px-4 py-4 flex flex-col gap-3">
+        <p className="text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>
+          Deposit with Crypto
+        </p>
+
+        {toast && (
+          <div
+            className="flex items-center gap-2 text-xs px-3 py-2 rounded border"
+            style={{
+              borderColor: toast.ok ? 'var(--color-success)' : 'var(--color-danger)',
+              color: toast.ok ? 'var(--color-success)' : 'var(--color-danger)',
+            }}
+          >
+            {toast.ok ? <CheckCircle size={16} /> : <Warning size={16} />}
+            {toast.msg}
+          </div>
+        )}
+
+        <div className="flex flex-col gap-1">
+          <label className="text-xs" style={{ color: 'var(--color-muted)' }}>Amount in USD</label>
+          <input
+            type="number"
+            min={1}
+            max={500}
+            step={0.01}
+            value={amountUsd}
+            onChange={e => setAmountUsd(e.target.value)}
+            placeholder="e.g. 10"
+            className="w-full rounded border px-3 py-2 text-sm bg-transparent outline-none focus:border-[var(--color-primary)]"
+            style={{ borderColor: 'var(--color-border)' }}
+            disabled={loading}
+          />
+        </div>
+
+        {coinPreview !== null && (
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+            You will receive: <span className="font-semibold" style={{ color: 'var(--color-xu)' }}>{coinPreview.toLocaleString('en-US')} coins</span>
+          </p>
+        )}
+
+        <button
+          onClick={handleDeposit}
+          disabled={!validAmount || loading}
+          className="btn-primary text-sm px-4 py-2 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {loading ? 'Redirecting…' : 'Deposit with Crypto'}
+        </button>
+      </div>
+    </FadeUp>
+  )
 }
 
 export function WalletPage() {
@@ -82,6 +206,9 @@ export function WalletPage() {
           </button>
         ))}
       </FadeUp>
+
+      {/* Crypto deposit panel */}
+      <DepositPanel />
 
       {/* Transaction history */}
       <section className="flex flex-col gap-3">

@@ -35,6 +35,9 @@
     // Secret: GOOGLE_CLIENT_ID → wrangler secret put GOOGLE_CLIENT_ID
     // Secret: GOOGLE_CLIENT_SECRET → wrangler secret put GOOGLE_CLIENT_SECRET
     // Secret: BETTER_AUTH_SECRET → wrangler secret put BETTER_AUTH_SECRET
+    // Secrets (set via: npx wrangler secret put SECRET_NAME)
+    // CONFIRMO_API_KEY
+    // CONFIRMO_WEBHOOK_SECRET
     "YOUTUBE_QUOTA_PROJECT": "yt-smm-exchange"
   },
 
