@@ -25,11 +25,11 @@ Tasks have `action_type: SUBSCRIBE | LIKE | COMMENT`
 - COMMENT: earner posts a preset comment on a video
 All tasks use coin escrow (`task_type='CROSS_SUB'` in DB, PAY removed from UI)
 
-## Data Models (after 7 migrations)
+## Data Models (after 8 migrations)
 - `user` (Better Auth): id, email, name, image, role, group_id, youtube_channel_id*, youtube_refresh_token*, youtube_linked_at*
-- `wallets`: user_id, balance_vnd (USD micro-deposit stub), xu_balance (coins), xu_pending
-- `tasks`: id, buyer_id, channel_id, channel_url, action_type, video_id, video_title, video_thumbnail, comment_template, target_count, xu_per_unit, escrow_xu, deadline, status
-- `task_claims`: id, task_id, claimer_id, status (CLAIMED→SUBMITTED→VERIFIED|REJECTED|EXPIRED), xu_amount, xu_status (NONE→LOCKED→CREDITED|CLAWED_BACK)
+- `wallets`: user_id, balance_usd_micro (USD micro-deposit stub), coin_balance (coins), coin_pending
+- `tasks`: id, buyer_id, channel_id, channel_url, action_type, video_id, video_title, video_thumbnail, comment_template, target_count, coin_per_unit, escrow_coin, deadline, status
+- `task_claims`: id, task_id, claimer_id, status (CLAIMED→SUBMITTED→VERIFIED|REJECTED|EXPIRED), coin_amount, coin_status (NONE→LOCKED→CREDITED|CLAWED_BACK)
 - `task_claim_results`: claim_id, comment_id, rating
 - `user_groups`: id, name, max_channels
 - `user_linked_channels`: id, user_id, channel_id, channel_name, channel_avatar, channel_url, refresh_token
