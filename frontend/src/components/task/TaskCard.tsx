@@ -1,4 +1,4 @@
-import { YoutubeLogo, CurrencyCircleDollar, CheckCircle, Clock, XCircle } from '@phosphor-icons/react'
+import { YoutubeLogo, CheckCircle, Clock, XCircle, ThumbsUp, ChatCircle } from '@phosphor-icons/react'
 import type { Task } from '../../types'
 import { StaggerItem } from '../ui/Motion'
 
@@ -23,7 +23,19 @@ export function TaskCard({ task, onClaim, claimed, claimDisabled }: TaskCardProp
     ? Math.round((task.delivered_count / task.target_count) * 100)
     : 0
 
-  const isPay = task.task_type === 'PAY'
+  const actionType = task.action_type ?? 'SUBSCRIBE'
+
+  const actionBadge = () => {
+    if (actionType === 'LIKE') return <><ThumbsUp size={11} weight="fill" /> Like</>
+    if (actionType === 'COMMENT') return <><ChatCircle size={11} weight="fill" /> Comment</>
+    return <><YoutubeLogo size={11} weight="fill" /> Subscribe</>
+  }
+
+  const actionLabel = () => {
+    if (actionType === 'LIKE') return 'xu/like'
+    if (actionType === 'COMMENT') return 'xu/comment'
+    return 'xu/sub'
+  }
 
   return (
     <StaggerItem>
@@ -68,11 +80,8 @@ export function TaskCard({ task, onClaim, claimed, claimDisabled }: TaskCardProp
           </div>
 
           {/* Type badge */}
-          <span className={`badge flex-shrink-0 ${isPay ? 'badge-orange' : 'badge-xu'}`}>
-            {isPay
-              ? <><CurrencyCircleDollar size={11} weight="fill" /> USD</>
-              : <><span className="mono">✦</span> Xu</>
-            }
+          <span className="badge flex-shrink-0 badge-xu">
+            {actionBadge()}
           </span>
         </div>
 
@@ -80,14 +89,9 @@ export function TaskCard({ task, onClaim, claimed, claimDisabled }: TaskCardProp
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Reward</p>
-            {isPay
-              ? <p className="mono font-medium" style={{ color: 'var(--color-xu)' }}>
-                  {task.xu_per_unit} <span className="text-xs" style={{ color: 'var(--color-muted)' }}>xu/sub</span>
-                </p>
-              : <p className="mono font-medium" style={{ color: 'var(--color-xu)' }}>
-                  {task.xu_per_unit} <span className="text-xs" style={{ color: 'var(--color-muted)' }}>xu/sub</span>
-                </p>
-            }
+            <p className="mono font-medium" style={{ color: 'var(--color-xu)' }}>
+              {task.xu_per_unit} <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{actionLabel()}</span>
+            </p>
           </div>
           <div className="text-right">
             <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Remaining</p>

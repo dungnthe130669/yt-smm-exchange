@@ -1,11 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { YoutubeLogo, Info, Warning, ArrowRight, ThumbsUp, ChatCircle } from '@phosphor-icons/react'
 import { useNavigate, Link } from 'react-router-dom'
 import { api } from '../lib/api'
 import { FadeUp } from '../components/ui/Motion'
 
-type Mode = 'PAY' | 'CROSS_SUB'
 type ActionType = 'SUBSCRIBE' | 'LIKE' | 'COMMENT'
 
 interface Channel {
@@ -16,16 +15,11 @@ interface Channel {
 }
 
 interface Pricing {
-  pay_price_per_unit_vnd?: number
-  xu_per_unit_pay?: number
   xu_per_unit_cross?: number
   cooldown_seconds?: number
   xu_per_subscribe?: number
   xu_per_like?: number
   xu_per_comment?: number
-  pay_per_subscribe_vnd?: number
-  pay_per_like_vnd?: number
-  pay_per_comment_vnd?: number
 }
 
 interface CreateTaskBody {
@@ -34,7 +28,6 @@ interface CreateTaskBody {
   channel_name?: string
   channel_avatar?: string
   target_count: number
-  task_type: Mode
   deadline_days: number
   action_type: ActionType
   video_id?: string
@@ -58,7 +51,6 @@ export function CreateTaskPage() {
   const qc = useQueryClient()
 
   const [actionType, setActionType] = useState<ActionType>('SUBSCRIBE')
-  const [mode, setMode] = useState<Mode>('PAY')
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null)
   const [targetCount, setTargetCount] = useState(10)
   const [deadlineDays, setDeadlineDays] = useState(7)
@@ -81,40 +73,25 @@ export function CreateTaskPage() {
   const channels = channelsData?.channels ?? []
   const selectedChannel = channels.find(ch => ch.channel_id === selectedChannelId) ?? channels[0] ?? null
 
-  // Auto-select first channel
-  if (channels.length > 0 && !selectedChannelId) {
-    setSelectedChannelId(channels[0].channel_id)
-  }
+  // Auto-select first channel (in effect, not render body)
+  useEffect(() => {
+    if (channels.length > 0 && !selectedChannelId) {
+      setSelectedChannelId(channels[0].channel_id)
+    }
+  }, [channels, selectedChannelId])
 
-  // Pricing display per action type
+  // Pricing display per action type (coin only)
   const getPricingDisplay = () => {
-    if (actionType === 'SUBSCRIBE') {
-      return mode === 'PAY'
-        ? `${pricing?.pay_per_subscribe_vnd ?? pricing?.pay_price_per_unit_vnd ?? '—'} USD / sub`
-        : `${pricing?.xu_per_subscribe ?? pricing?.xu_per_unit_cross ?? '—'} coin / sub`
-    }
-    if (actionType === 'LIKE') {
-      return mode === 'PAY'
-        ? `${pricing?.pay_per_like_vnd ?? '—'} USD / like`
-        : `${pricing?.xu_per_like ?? '—'} coin / like`
-    }
-    // COMMENT
-    return mode === 'PAY'
-      ? `${pricing?.pay_per_comment_vnd ?? '—'} USD / comment`
-      : `${pricing?.xu_per_comment ?? '—'} coin / comment`
+    if (actionType === 'SUBSCRIBE') return `${pricing?.xu_per_subscribe ?? pricing?.xu_per_unit_cross ?? 10} coin / sub`
+    if (actionType === 'LIKE') return `${pricing?.xu_per_like ?? 5} coin / like`
+    return `${pricing?.xu_per_comment ?? 15} coin / comment`
   }
 
   const pricePerUnit = actionType === 'SUBSCRIBE'
-    ? (mode === 'PAY'
-        ? (pricing?.pay_per_subscribe_vnd ?? pricing?.pay_price_per_unit_vnd ?? 5)
-        : (pricing?.xu_per_subscribe ?? pricing?.xu_per_unit_cross ?? 14))
+    ? (pricing?.xu_per_subscribe ?? pricing?.xu_per_unit_cross ?? 10)
     : actionType === 'LIKE'
-      ? (mode === 'PAY'
-          ? (pricing?.pay_per_like_vnd ?? 5)
-          : (pricing?.xu_per_like ?? 14))
-      : (mode === 'PAY'
-          ? (pricing?.pay_per_comment_vnd ?? 5)
-          : (pricing?.xu_per_comment ?? 14))
+      ? (pricing?.xu_per_like ?? 5)
+      : (pricing?.xu_per_comment ?? 15)
 
   const totalCost = (typeof pricePerUnit === 'number' ? pricePerUnit : 0) * targetCount
 
@@ -145,7 +122,6 @@ export function CreateTaskPage() {
         channel_name: selectedChannel.channel_name,
         channel_avatar: selectedChannel.channel_avatar ?? undefined,
         target_count: targetCount,
-        task_type: mode,
         deadline_days: deadlineDays,
         action_type: 'SUBSCRIBE',
       })
@@ -156,7 +132,6 @@ export function CreateTaskPage() {
         channel_id: videoId,
         channel_name: videoTitle || undefined,
         target_count: targetCount,
-        task_type: mode,
         deadline_days: deadlineDays,
         action_type: 'LIKE',
         video_id: videoId,
@@ -169,7 +144,6 @@ export function CreateTaskPage() {
         channel_id: videoId,
         channel_name: videoTitle || undefined,
         target_count: targetCount,
-        task_type: mode,
         deadline_days: deadlineDays,
         action_type: 'COMMENT',
         video_id: videoId,
@@ -207,39 +181,18 @@ export function CreateTaskPage() {
         ))}
       </FadeUp>
 
-      {/* Mode toggle (PAY / CROSS_SUB) */}
-      <FadeUp delay={0.05} className="grid grid-cols-2 gap-2 p-1 rounded-lg" style={{ background: 'var(--color-elevated)' }}>
-        {(['PAY', 'CROSS_SUB'] as Mode[]).map((m) => (
-          <button
-            key={m}
-            onClick={() => setMode(m)}
-            className="py-2 px-4 rounded-md text-sm font-medium transition-all"
-            style={{
-              background: mode === m ? 'var(--color-surface)' : 'transparent',
-              color: mode === m ? 'var(--color-text)' : 'var(--color-muted)',
-              border: mode === m ? '1px solid var(--color-border)' : '1px solid transparent',
-            }}
-          >
-            {m === 'PAY' ? 'Pay (real)' : 'Coins (cross-sub)'}
-          </button>
-        ))}
-      </FadeUp>
-
       {/* Info box */}
       <FadeUp delay={0.08}>
         <div
           className="flex gap-3 p-3 rounded-md text-sm"
           style={{
-            background: mode === 'PAY' ? 'rgb(249 115 22 / 0.08)' : 'rgb(245 158 11 / 0.08)',
-            borderLeft: `2px solid ${mode === 'PAY' ? 'var(--color-orange)' : 'var(--color-xu)'}`,
+            background: 'rgb(245 158 11 / 0.08)',
+            borderLeft: '2px solid var(--color-xu)',
           }}
         >
-          <Info size={16} color={mode === 'PAY' ? 'var(--color-orange)' : 'var(--color-xu)'} style={{ flexShrink: 0, marginTop: 2 }} />
+          <Info size={16} color="var(--color-xu)" style={{ flexShrink: 0, marginTop: 2 }} />
           <p style={{ color: 'var(--color-muted)' }}>
-            {mode === 'PAY'
-              ? `Pay tasks appear first in the feed. Price: ${getPricingDisplay()} (admin-set).`
-              : `Coin tasks use coins you earned. Price: ${getPricingDisplay()} (admin-set). Max 50 units.`
-            }
+            {`Coin tasks use coins you earned. Price: ${getPricingDisplay()} (admin-set). Max 50 units.`}
           </p>
         </div>
       </FadeUp>
@@ -354,14 +307,14 @@ export function CreateTaskPage() {
             <label className="text-sm font-medium">
               {actionType === 'SUBSCRIBE' ? 'Subscribers' : actionType === 'LIKE' ? 'Likes' : 'Comments'} needed
               <span className="text-xs ml-2" style={{ color: 'var(--color-muted)' }}>
-                (max {mode === 'PAY' ? 1000 : 50})
+                (max 50)
               </span>
             </label>
             <input
               type="number"
               className="input"
               min={1}
-              max={mode === 'PAY' ? 1000 : 50}
+              max={50}
               value={targetCount}
               onChange={(e) => setTargetCount(parseInt(e.target.value) || 1)}
               required
@@ -395,10 +348,10 @@ export function CreateTaskPage() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Total escrow</p>
-              <p className="mono font-bold text-lg" style={{ color: mode === 'PAY' ? 'var(--color-orange)' : 'var(--color-xu)' }}>
+              <p className="mono font-bold text-lg" style={{ color: 'var(--color-xu)' }}>
                 {totalCost.toLocaleString()}
                 <span className="text-sm font-normal ml-1" style={{ color: 'var(--color-muted)' }}>
-                  {mode === 'PAY' ? 'USD' : 'coin'}
+                  coin
                 </span>
               </p>
             </div>

@@ -36,12 +36,29 @@ export function WalletPage() {
       <FadeUp>
         <h1 className="display text-xl">My Wallet</h1>
         <p className="text-sm mt-0.5" style={{ color: 'var(--color-muted)' }}>
-          Coins, USD balance and transaction history.
+          Coin balance and transaction history. USD deposit balance shown below.
         </p>
       </FadeUp>
 
       {/* Wallet summary */}
       {wallet && <WalletBar wallet={wallet} />}
+
+      {/* USD deposit balance */}
+      {wallet && (
+        <FadeUp delay={0.06}>
+          <div className="card px-4 py-3 flex items-center justify-between">
+            <div>
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>USD Deposit Balance</p>
+              <p className="mono font-medium text-sm" style={{ color: 'var(--color-success)' }}>
+                {(wallet.balance_vnd ?? 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+              </p>
+            </div>
+            <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--color-elevated)', color: 'var(--color-muted)' }}>
+              Deposit only
+            </span>
+          </div>
+        </FadeUp>
+      )}
 
       {/* Quick actions */}
       <FadeUp delay={0.08} className="grid grid-cols-3 gap-3">
