@@ -15,9 +15,9 @@ interface Channel {
 }
 
 interface Pricing {
-  xu_per_subscribe?: number
-  xu_per_like?: number
-  xu_per_comment?: number
+  coin_per_subscribe?: number
+  coin_per_like?: number
+  coin_per_comment?: number
   cooldown_seconds?: number
   task_cooldown_seconds?: number
 }
@@ -82,15 +82,15 @@ export function CreateTaskPage() {
 
   // Pricing display per action type (coin only)
   const getPricingDisplay = () => {
-    if (actionType === 'SUBSCRIBE') return `${pricing?.xu_per_subscribe ?? 10} coin / sub`
-    if (actionType === 'LIKE') return `${pricing?.xu_per_like ?? 5} coin / like`
-    return `${pricing?.xu_per_comment ?? 15} coin / comment`
+    if (actionType === 'SUBSCRIBE') return `${pricing?.coin_per_subscribe ?? 10} coin / sub`
+    if (actionType === 'LIKE') return `${pricing?.coin_per_like ?? 5} coin / like`
+    return `${pricing?.coin_per_comment ?? 15} coin / comment`
   }
 
   const pricePerUnit =
-    actionType === 'SUBSCRIBE' ? (pricing?.xu_per_subscribe ?? 10) :
-    actionType === 'LIKE'      ? (pricing?.xu_per_like ?? 5) :
-                                 (pricing?.xu_per_comment ?? 15)
+    actionType === 'SUBSCRIBE' ? (pricing?.coin_per_subscribe ?? 10) :
+    actionType === 'LIKE'      ? (pricing?.coin_per_like ?? 5) :
+                                 (pricing?.coin_per_comment ?? 15)
 
   const totalCost = (typeof pricePerUnit === 'number' ? pricePerUnit : 0) * targetCount
 

@@ -196,7 +196,7 @@ def suite_tasks(r: TestRunner, buyer: Client, earner: Client):
     res = anon.get("/api/tasks/pricing")
     r.check("GET /tasks/pricing → 200", res["status"] == 200)
     pricing = res["body"]
-    r.check("pricing has xu_per_subscribe", "xu_per_subscribe" in pricing or "coin_per_unit_cross" in pricing,
+    r.check("pricing has coin_per_subscribe", "coin_per_subscribe" in pricing,
             str(list(pricing.keys())[:6]))
 
     # Random task (earner perspective — earner can see buyer's tasks)

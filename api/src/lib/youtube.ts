@@ -234,8 +234,14 @@ export async function subscribeToChannel(
   }
 
   if (!res.ok) {
-    const data = await res.json<{ error?: { message?: string } }>()
-    return { ok: false, error: data.error?.message ?? `HTTP ${res.status}` }
+    const data = await res.json<{ error?: { message?: string; errors?: Array<{ reason?: string }> } }>()
+    const reason = data.error?.errors?.[0]?.reason ?? ''
+    const msg = data.error?.message ?? `HTTP ${res.status}`
+    // subscriptionForbidden = trying to sub own channel
+    if (reason === 'subscriptionForbidden') {
+      return { ok: false, error: 'Cannot subscribe to your own channel' }
+    }
+    return { ok: false, error: msg }
   }
 
   return { ok: true }

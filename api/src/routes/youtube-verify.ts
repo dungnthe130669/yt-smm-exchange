@@ -272,6 +272,10 @@ youtubeVerifyRoutes.post('/:claimId/perform', async (c) => {
   const now = Math.floor(Date.now() / 1000)
 
   if (actionType === 'SUBSCRIBE') {
+    // Cannot subscribe to own channel
+    if (earnerChannelId === claim.target_channel_id) {
+      return c.json({ error: 'OWN_CHANNEL', message: 'Cannot subscribe to your own channel' }, 400)
+    }
     const subResult = await subscribeToChannel(accessToken, claim.target_channel_id)
     if (!subResult.ok) {
       return c.json({ error: 'ACTION_FAILED', message: `Subscribe failed: ${subResult.error}` }, 400)

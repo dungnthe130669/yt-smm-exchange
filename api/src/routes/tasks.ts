@@ -56,11 +56,9 @@ taskRoutes.get('/feed', async (c) => {
 taskRoutes.get('/pricing', async (c) => {
   const raw = await c.env.RATE_KV.get('pricing_config')
   const defaults = {
-    xu_per_subscribe: 10,
-    xu_per_like: 5,
-    xu_per_comment: 15,
-    xu_per_unit_cross: 14,   // legacy key — keep for backward compat
-    coin_per_unit_cross: 14, // new key
+    coin_per_subscribe: 10,
+    coin_per_like: 5,
+    coin_per_comment: 15,
   }
   const config = raw ? { ...defaults, ...JSON.parse(raw) } : defaults
   return c.json(config)
@@ -168,21 +166,13 @@ taskRoutes.post('/', async (c) => {
     return c.json({ error: 'INVALID_DEADLINE', message: 'Duration must be 3, 7, or 14 days' }, 400)
   }
 
-  // Read admin-set pricing — support both old and new KV keys
+  // Read admin-set pricing from KV
   const pricingRaw = await c.env.RATE_KV.get('pricing_config')
   const pricing = pricingRaw ? JSON.parse(pricingRaw) : {}
-  const defaultPricing = {
-    xu_per_subscribe: 10, xu_per_like: 5, xu_per_comment: 15,
-    xu_per_unit_cross: 14, // legacy fallback
-    coin_per_unit_cross: 14, // new key fallback
-  }
-  const p = { ...defaultPricing, ...pricing }
-  // Prefer new key, fall back to old
-  if (!p.coin_per_unit_cross) p.coin_per_unit_cross = p.xu_per_unit_cross
-
-  const coinPerUnit = actionType === 'SUBSCRIBE' ? p.xu_per_subscribe
-    : actionType === 'LIKE' ? p.xu_per_like
-    : p.xu_per_comment
+  const coinPerUnit =
+    actionType === 'SUBSCRIBE' ? (pricing.coin_per_subscribe ?? 10) :
+    actionType === 'LIKE'      ? (pricing.coin_per_like      ?? 5)  :
+                                  (pricing.coin_per_comment   ?? 15)
 
   // Always coin escrow (CROSS_SUB logic)
   const escrowCoinAmount = coinPerUnit * Math.floor(body.target_count)
