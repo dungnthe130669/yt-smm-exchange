@@ -23,12 +23,15 @@ export async function authMiddleware(
       const uid = session.user.id
       // Auto-create wallet if not exists (idempotent)
       await c.env.DB.prepare(`INSERT OR IGNORE INTO wallets (user_id) VALUES (?)`).bind(uid).run().catch(() => {})
+      const userRow = await c.env.DB.prepare(
+        `SELECT role FROM "user" WHERE id = ?`
+      ).bind(uid).first<{ role: string }>()
       c.set('user', {
         id: session.user.id,
         email: session.user.email,
         name: session.user.name,
         avatar: session.user.image ?? null,
-        role: 'user' as 'user' | 'admin',
+        role: (userRow?.role ?? 'user') as 'user' | 'admin',
         created_at: session.user.createdAt ? new Date(session.user.createdAt).getTime() / 1000 : 0,
       })
       c.set('userId', session.user.id)
@@ -43,6 +46,13 @@ export async function authMiddleware(
 // Guard helper — call inside route handlers that require auth
 export function requireAuth(c: Context<{ Bindings: Env; Variables: HonoVariables }>) {
   const user = c.get('user')
-  if (!user) return c.json({ error: 'UNAUTHORIZED', message: 'Cần đăng nhập' }, 401)
+  if (!user) return c.json({ error: 'UNAUTHORIZED', message: 'Authentication required' }, 401)
   return null // null = ok, caller continues
+}
+
+export function requireAdmin(c: Context<{ Bindings: Env; Variables: HonoVariables }>) {
+  const user = c.get('user')
+  if (!user) return c.json({ error: 'UNAUTHORIZED', message: 'Authentication required' }, 401)
+  if (user.role !== 'admin') return c.json({ error: 'FORBIDDEN', message: 'Admin only' }, 403)
+  return null
 }
