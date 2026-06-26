@@ -15,9 +15,10 @@ interface TaskCardProps {
   task: Task
   onClaim?: (taskId: string) => void
   claimed?: boolean
+  claimDisabled?: boolean
 }
 
-export function TaskCard({ task, onClaim, claimed }: TaskCardProps) {
+export function TaskCard({ task, onClaim, claimed, claimDisabled }: TaskCardProps) {
   const progress = task.target_count > 0
     ? Math.round((task.delivered_count / task.target_count) * 100)
     : 0
@@ -123,6 +124,8 @@ export function TaskCard({ task, onClaim, claimed }: TaskCardProps) {
               ? <button
                   className="btn-primary text-xs py-1.5 px-3"
                   onClick={() => onClaim?.(task.id)}
+                  disabled={claimDisabled}
+                  title={claimDisabled ? 'Link your YouTube channel first' : undefined}
                 >
                   Claim
                 </button>

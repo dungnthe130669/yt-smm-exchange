@@ -10,7 +10,7 @@ export function WalletBar({ wallet }: WalletBarProps) {
   return (
     <FadeUp className="card px-4 py-3 flex items-center gap-6 overflow-x-auto">
 
-      {/* Credits balance */}
+      {/* Coins balance */}
       <div className="flex items-center gap-2 flex-shrink-0">
         <div
           className="w-8 h-8 rounded-full flex items-center justify-center"
@@ -19,17 +19,17 @@ export function WalletBar({ wallet }: WalletBarProps) {
           <Coins size={16} color="var(--color-xu)" weight="fill" />
         </div>
         <div>
-          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Credits</p>
+          <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Coins</p>
           <p className="mono font-medium text-sm" style={{ color: 'var(--color-xu)' }}>
             <CountUp value={wallet.xu_balance} />
-            <span className="text-xs ml-0.5" style={{ color: 'var(--color-muted)' }}>cr</span>
+            <span className="text-xs ml-0.5" style={{ color: 'var(--color-muted)' }}>coin</span>
           </p>
         </div>
       </div>
 
       <div className="w-px h-8 flex-shrink-0" style={{ background: 'var(--color-border)' }} />
 
-      {/* Credits pending */}
+      {/* Coins pending */}
       <div className="flex items-center gap-2 flex-shrink-0">
         <div
           className="w-8 h-8 rounded-full flex items-center justify-center"
@@ -41,7 +41,7 @@ export function WalletBar({ wallet }: WalletBarProps) {
           <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Pending</p>
           <p className="mono font-medium text-sm" style={{ color: 'var(--color-orange)' }}>
             <CountUp value={wallet.xu_pending} />
-            <span className="text-xs ml-0.5" style={{ color: 'var(--color-muted)' }}>cr</span>
+            <span className="text-xs ml-0.5" style={{ color: 'var(--color-muted)' }}>coin</span>
           </p>
         </div>
       </div>

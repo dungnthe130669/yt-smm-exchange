@@ -1,187 +1,129 @@
-import { useQuery, useMutation } from '@tanstack/react-query'
-import { Clock, CheckCircle, XCircle, ArrowSquareOut } from '@phosphor-icons/react'
+import type { ReactElement } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { YoutubeLogo, ThumbsUp, ChatCircle, Coins } from '@phosphor-icons/react'
 import { api } from '../lib/api'
-import type { TaskClaim } from '../types'
 import { FadeUp, StaggerList, StaggerItem } from '../components/ui/Motion'
 
-const XU_STATUS_LABEL: Record<string, { label: string; color: string }> = {
-  NONE:         { label: 'Pending verify',      color: 'var(--color-muted)' },
-  LOCKED:       { label: 'Credits locked',      color: 'var(--color-orange)' },
-  CREDITED:     { label: 'Credits earned',      color: 'var(--color-success)' },
-  CLAWED_BACK:  { label: 'Credits clawed back', color: 'var(--color-danger)' },
+const COIN_STATUS: Record<string, { label: string; color: string }> = {
+  NONE:        { label: 'Pending',          color: 'var(--color-muted)' },
+  LOCKED:      { label: 'Locked 48h',       color: 'var(--color-orange)' },
+  CREDITED:    { label: 'Earned',           color: 'var(--color-success)' },
+  CLAWED_BACK: { label: 'Clawed back',      color: 'var(--color-danger)' },
 }
 
-const CLAIM_STATUS_LABEL: Record<string, string> = {
-  CLAIMED:   'Pending sub',
-  SUBMITTED: 'Verifying',
-  VERIFIED:  'Verified',
-  REJECTED:  'Rejected',
-  EXPIRED:   'Expired',
+const ACTION_ICON: Record<string, ReactElement> = {
+  SUBSCRIBE: <YoutubeLogo size={16} weight="fill" color="#FF0000" />,
+  LIKE:      <ThumbsUp size={16} weight="fill" color="var(--color-danger)" />,
+  COMMENT:   <ChatCircle size={16} weight="fill" color="#818cf8" />,
 }
 
-function countdownLabel(mustSubmitAfter: number) {
-  const diff = mustSubmitAfter * 1000 - Date.now()
-  if (diff <= 0) return null
-  const m = Math.ceil(diff / 60000)
-  return `Wait ${m} more min`
+const ACTION_LABEL: Record<string, string> = {
+  SUBSCRIBE: 'Subscribe',
+  LIKE: 'Like',
+  COMMENT: 'Comment',
+}
+
+const CLAIM_STATUS_COLOR: Record<string, string> = {
+  VERIFIED: 'var(--color-success)',
+  REJECTED: 'var(--color-danger)',
+  EXPIRED:  'var(--color-muted)',
+}
+
+interface EarningRow {
+  id: string
+  action_type?: string
+  xu_amount: number
+  xu_status: string
+  status: string
+  claimed_at: number
 }
 
 export function MyTasksPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['my-tasks'],
-    queryFn: () => api.get<{ claims: TaskClaim[] }>('/claims/my'),
-    refetchInterval: 30_000,
+    queryFn: () => api.get<{ claims: EarningRow[] }>('/claims/my'),
+    refetchInterval: 60_000,
   })
 
-  const submitMutation = useMutation({
-    mutationFn: (claimId: string) =>
-      api.post<{ ok: boolean; verify_url: string }>(`/claims/${claimId}/submit`, {}),
-    onSuccess: (res) => {
-      // Redirect to YouTube OAuth verify
-      window.location.href = res.verify_url
-    },
-  })
-
-  const claims = data?.claims ?? []
-  const active  = claims.filter((c) => c.status === 'CLAIMED' || c.status === 'SUBMITTED')
-  const done    = claims.filter((c) => !['CLAIMED', 'SUBMITTED'].includes(c.status))
+  const earnings = (data?.claims ?? []).filter(c => c.status !== 'CLAIMED' && c.status !== 'SUBMITTED')
+  const pending = (data?.claims ?? []).filter(c => c.status === 'CLAIMED' || c.status === 'SUBMITTED')
 
   if (isLoading) {
-    return (
-      <div className="flex flex-col gap-3">
-        {[1, 2].map((i) => (
-          <div key={i} className="card p-4 h-28 animate-pulse" />
-        ))}
-      </div>
-    )
+    return <div className="flex flex-col gap-2">{[1,2,3].map(i => <div key={i} className="card h-14 animate-pulse" />)}</div>
   }
 
   return (
     <div className="flex flex-col gap-6">
       <FadeUp>
-        <h1 className="display text-xl">My Tasks</h1>
+        <h1 className="display text-xl">My Earnings</h1>
         <p className="text-sm mt-0.5" style={{ color: 'var(--color-muted)' }}>
-          Track your claimed tasks, submit to earn credits.
+          Your coin earning history.
         </p>
       </FadeUp>
 
-      {/* Active claims */}
-      {active.length > 0 && (
-        <section className="flex flex-col gap-3">
-          <p className="text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>
-            In Progress ({active.length})
-          </p>
-          <StaggerList className="flex flex-col gap-3">
-            {active.map((claim) => {
-              const waiting = countdownLabel(claim.must_submit_after)
-              const canSubmit = !waiting && claim.status === 'CLAIMED'
-
-              return (
-                <StaggerItem key={claim.id}>
-                  <div className="card p-4 flex flex-col gap-3">
-                    {/* Channel info */}
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-medium text-sm truncate">{claim.channel_name ?? claim.channel_url}</p>
-                        <a
-                          href={claim.channel_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs flex items-center gap-1"
-                          style={{ color: 'var(--color-link)' }}
-                        >
-                          Open YouTube <ArrowSquareOut size={11} />
-                        </a>
-                      </div>
-                      <span className="badge badge-muted flex-shrink-0">
-                        {CLAIM_STATUS_LABEL[claim.status]}
-                      </span>
-                    </div>
-
-                    {/* Reward */}
-                    <div className="flex items-center gap-2 text-sm">
-                      <span style={{ color: 'var(--color-muted)' }}>Reward:</span>
-                      <span className="mono font-medium" style={{ color: 'var(--color-xu)' }}>
-                        {claim.xu_per_unit ?? claim.xu_amount} cr
-                      </span>
-                      <span className="text-xs" style={{ color: 'var(--color-muted)' }}>(locked 48h after verify)</span>
-                    </div>
-
-                    {/* Timer or submit */}
-                    {waiting
-                      ? <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--color-orange)' }}>
-                          <Clock size={14} />
-                          {waiting} remaining before submit
-                        </div>
-                      : canSubmit
-                        ? <div className="flex items-center gap-3">
-                            <p className="text-xs flex-1" style={{ color: 'var(--color-muted)' }}>
-                              Already subscribed? Click verify to confirm via Google OAuth.
-                            </p>
-                            <button
-                              className="btn-primary text-xs py-1.5 px-3 flex-shrink-0"
-                              onClick={() => submitMutation.mutate(claim.id)}
-                              disabled={submitMutation.isPending}
-                            >
-                              {submitMutation.isPending ? 'Processing...' : 'Verify sub'}
-                            </button>
-                          </div>
-                        : null
-                    }
-                  </div>
-                </StaggerItem>
-              )
-            })}
-          </StaggerList>
-        </section>
-      )}
-
-      {/* Completed claims */}
-      {done.length > 0 && (
-        <section className="flex flex-col gap-3">
-          <p className="text-xs font-medium uppercase tracking-widest" style={{ color: 'var(--color-muted)' }}>
-            History ({done.length})
-          </p>
-          <StaggerList className="flex flex-col gap-2">
-            {done.map((claim) => {
-              const xuInfo = XU_STATUS_LABEL[claim.xu_status] ?? XU_STATUS_LABEL['NONE']!
-              return (
-                <StaggerItem key={claim.id}>
-                  <div className="card p-3 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 min-w-0">
-                      {claim.status === 'VERIFIED'
-                        ? <CheckCircle size={16} color="var(--color-success)" weight="fill" />
-                        : <XCircle size={16} color="var(--color-danger)" weight="fill" />
-                      }
-                      <p className="text-sm truncate">{claim.channel_name ?? claim.channel_url}</p>
-                    </div>
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      <span className="mono text-sm" style={{ color: 'var(--color-xu)' }}>
-                        {claim.xu_amount} cr
-                      </span>
-                      <span className="text-xs" style={{ color: xuInfo.color }}>
-                        {xuInfo.label}
-                      </span>
-                    </div>
-                  </div>
-                </StaggerItem>
-              )
-            })}
-          </StaggerList>
-        </section>
-      )}
-
-      {claims.length === 0 && (
-        <FadeUp className="card p-10 text-center flex flex-col items-center gap-3">
-          <div
-            className="w-14 h-14 rounded-full flex items-center justify-center"
-            style={{ background: 'var(--color-elevated)' }}
-          >
-            <Clock size={24} color="var(--color-muted)" />
+      {/* Pending (in-flight) — minimal, no channel info */}
+      {pending.length > 0 && (
+        <FadeUp delay={0.04}>
+          <div className="card p-3 flex flex-col gap-2">
+            <p className="text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>Processing ({pending.length})</p>
+            {pending.map(c => (
+              <div key={c.id} className="flex items-center gap-2 text-sm">
+                {ACTION_ICON[c.action_type ?? 'SUBSCRIBE']}
+                <span style={{ color: 'var(--color-muted)' }}>{ACTION_LABEL[c.action_type ?? 'SUBSCRIBE'] ?? c.action_type}</span>
+                <span className="ml-auto text-xs" style={{ color: 'var(--color-muted)' }}>In progress…</span>
+              </div>
+            ))}
           </div>
-          <p className="font-medium">No tasks yet</p>
+        </FadeUp>
+      )}
+
+      {/* Earnings history */}
+      {earnings.length > 0 ? (
+        <section className="flex flex-col gap-2">
+          <p className="text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-muted)' }}>
+            Earnings ({earnings.length})
+          </p>
+          <StaggerList className="flex flex-col gap-1.5">
+            {earnings.map(row => {
+              const coinStatus = COIN_STATUS[row.xu_status] ?? COIN_STATUS['NONE']!
+              const date = new Date(row.claimed_at * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+              const isVerified = row.status === 'VERIFIED'
+              return (
+                <StaggerItem key={row.id}>
+                  <div className="card p-3 flex items-center gap-3">
+                    <div className="flex-shrink-0">
+                      {ACTION_ICON[row.action_type ?? 'SUBSCRIBE']}
+                    </div>
+                    <span className="text-sm flex-shrink-0" style={{ color: 'var(--color-muted)' }}>
+                      {ACTION_LABEL[row.action_type ?? 'SUBSCRIBE'] ?? row.action_type}
+                    </span>
+                    {isVerified ? (
+                      <span className="mono text-sm font-bold" style={{ color: 'var(--color-xu)' }}>
+                        +{row.xu_amount}
+                      </span>
+                    ) : (
+                      <span className="text-sm" style={{ color: CLAIM_STATUS_COLOR[row.status] ?? 'var(--color-muted)' }}>
+                        {row.status.toLowerCase()}
+                      </span>
+                    )}
+                    <span className="text-xs ml-auto flex-shrink-0" style={{ color: coinStatus.color }}>
+                      {isVerified ? coinStatus.label : ''}
+                    </span>
+                    <span className="text-xs flex-shrink-0" style={{ color: 'var(--color-muted)' }}>{date}</span>
+                  </div>
+                </StaggerItem>
+              )
+            })}
+          </StaggerList>
+        </section>
+      ) : (
+        <FadeUp className="card p-10 text-center flex flex-col items-center gap-3">
+          <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: 'var(--color-elevated)' }}>
+            <Coins size={24} color="var(--color-muted)" />
+          </div>
+          <p className="font-medium">No earnings yet</p>
           <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-            Head to the Feed to claim tasks and start earning credits.
+            Complete tasks on the Earn page to start earning coins.
           </p>
         </FadeUp>
       )}

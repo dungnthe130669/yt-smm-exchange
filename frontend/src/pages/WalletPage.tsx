@@ -6,9 +6,9 @@ import { WalletBar } from '../components/wallet/WalletBar'
 import { FadeUp, StaggerList, StaggerItem } from '../components/ui/Motion'
 
 const TXN_LABEL: Record<string, { label: string; sign: '+' | '-' | '~'; color: string }> = {
-  EARN:            { label: 'Earn credits', sign: '+', color: 'var(--color-success)' },
-  SPEND:           { label: 'Spend credits',sign: '-', color: 'var(--color-danger)'  },
-  BUY_XU:         { label: 'Buy credits',  sign: '+', color: 'var(--color-xu)'      },
+  EARN:            { label: 'Earn coins',  sign: '+', color: 'var(--color-success)' },
+  SPEND:           { label: 'Spend coins', sign: '-', color: 'var(--color-danger)'  },
+  BUY_XU:         { label: 'Buy coins',   sign: '+', color: 'var(--color-xu)'      },
   BUY_VND:        { label: 'Deposit USD',  sign: '+', color: 'var(--color-success)' },
   CLAW_BACK:      { label: 'Claw back',    sign: '-', color: 'var(--color-danger)'  },
   REFUND:         { label: 'Refund',       sign: '+', color: 'var(--color-success)' },
@@ -36,7 +36,7 @@ export function WalletPage() {
       <FadeUp>
         <h1 className="display text-xl">My Wallet</h1>
         <p className="text-sm mt-0.5" style={{ color: 'var(--color-muted)' }}>
-          Credits, USD balance and transaction history.
+          Coins, USD balance and transaction history.
         </p>
       </FadeUp>
 
@@ -47,7 +47,7 @@ export function WalletPage() {
       <FadeUp delay={0.08} className="grid grid-cols-3 gap-3">
         {[
           { icon: ArrowDown, label: 'Deposit USD',  color: 'var(--color-success)' },
-          { icon: Coins,     label: 'Buy Credits',  color: 'var(--color-xu)' },
+          { icon: Coins,     label: 'Buy Coins',  color: 'var(--color-xu)' },
           { icon: ArrowUp,   label: 'Withdraw',     color: 'var(--color-muted)' },
         ].map(({ icon: Icon, label, color }) => (
           <button

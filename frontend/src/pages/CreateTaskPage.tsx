@@ -1,41 +1,122 @@
 import { useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { YoutubeLogo, Info } from '@phosphor-icons/react'
-import { useNavigate } from 'react-router-dom'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { YoutubeLogo, Info, Warning, ArrowRight, ThumbsUp, ChatCircle } from '@phosphor-icons/react'
+import { useNavigate, Link } from 'react-router-dom'
 import { api } from '../lib/api'
 import { FadeUp } from '../components/ui/Motion'
 
 type Mode = 'PAY' | 'CROSS_SUB'
+type ActionType = 'SUBSCRIBE' | 'LIKE' | 'COMMENT'
+
+interface Channel {
+  channel_id: string
+  channel_name: string
+  channel_avatar: string | null
+  channel_url: string
+}
+
+interface Pricing {
+  pay_price_per_unit_vnd?: number
+  xu_per_unit_pay?: number
+  xu_per_unit_cross?: number
+  cooldown_seconds?: number
+  xu_per_subscribe?: number
+  xu_per_like?: number
+  xu_per_comment?: number
+  pay_per_subscribe_vnd?: number
+  pay_per_like_vnd?: number
+  pay_per_comment_vnd?: number
+}
 
 interface CreateTaskBody {
   channel_url: string
   channel_id: string
   channel_name?: string
+  channel_avatar?: string
   target_count: number
   task_type: Mode
-  price_per_unit_vnd?: number
-  xu_per_unit?: number
   deadline_days: number
+  action_type: ActionType
+  video_id?: string
+  video_title?: string
+  comment_template?: string
 }
 
-// Extract YouTube channel ID from URL
-function extractChannelId(url: string): string | null {
-  const m = url.match(/\/channel\/(UC[\w-]{22})/)
-  if (m) return m[1] ?? null
-  return null
+function extractVideoId(url: string): string | null {
+  const m = url.match(/(?:v=|youtu\.be\/)([\w-]{11})/)
+  return m?.[1] ?? null
 }
+
+const ACTION_TABS: { type: ActionType; label: string; icon: React.ReactNode }[] = [
+  { type: 'SUBSCRIBE', label: 'Subscribe', icon: <YoutubeLogo size={15} weight="fill" /> },
+  { type: 'LIKE', label: 'Like', icon: <ThumbsUp size={15} weight="fill" /> },
+  { type: 'COMMENT', label: 'Comment', icon: <ChatCircle size={15} weight="fill" /> },
+]
 
 export function CreateTaskPage() {
   const nav = useNavigate()
   const qc = useQueryClient()
 
+  const [actionType, setActionType] = useState<ActionType>('SUBSCRIBE')
   const [mode, setMode] = useState<Mode>('PAY')
-  const [channelUrl, setChannelUrl] = useState('')
-  const [channelName, setChannelName] = useState('')
+  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null)
   const [targetCount, setTargetCount] = useState(10)
-  const [pricePerUnit, setPricePerUnit] = useState(5)
-  const [xuPerUnit, setXuPerUnit] = useState(14)
   const [deadlineDays, setDeadlineDays] = useState(7)
+  const [videoUrl, setVideoUrl] = useState('')
+  const [videoTitle, setVideoTitle] = useState('')
+  const [commentTemplate, setCommentTemplate] = useState('')
+
+  const videoId = extractVideoId(videoUrl)
+
+  const { data: channelsData, isLoading: channelsLoading } = useQuery({
+    queryKey: ['my-channels'],
+    queryFn: () => api.get<{ channels: Channel[] }>('/tasks/my-channels'),
+  })
+
+  const { data: pricing } = useQuery({
+    queryKey: ['task-pricing'],
+    queryFn: () => api.get<Pricing>('/tasks/pricing'),
+  })
+
+  const channels = channelsData?.channels ?? []
+  const selectedChannel = channels.find(ch => ch.channel_id === selectedChannelId) ?? channels[0] ?? null
+
+  // Auto-select first channel
+  if (channels.length > 0 && !selectedChannelId) {
+    setSelectedChannelId(channels[0].channel_id)
+  }
+
+  // Pricing display per action type
+  const getPricingDisplay = () => {
+    if (actionType === 'SUBSCRIBE') {
+      return mode === 'PAY'
+        ? `${pricing?.pay_per_subscribe_vnd ?? pricing?.pay_price_per_unit_vnd ?? '—'} USD / sub`
+        : `${pricing?.xu_per_subscribe ?? pricing?.xu_per_unit_cross ?? '—'} coin / sub`
+    }
+    if (actionType === 'LIKE') {
+      return mode === 'PAY'
+        ? `${pricing?.pay_per_like_vnd ?? '—'} USD / like`
+        : `${pricing?.xu_per_like ?? '—'} coin / like`
+    }
+    // COMMENT
+    return mode === 'PAY'
+      ? `${pricing?.pay_per_comment_vnd ?? '—'} USD / comment`
+      : `${pricing?.xu_per_comment ?? '—'} coin / comment`
+  }
+
+  const pricePerUnit = actionType === 'SUBSCRIBE'
+    ? (mode === 'PAY'
+        ? (pricing?.pay_per_subscribe_vnd ?? pricing?.pay_price_per_unit_vnd ?? 5)
+        : (pricing?.xu_per_subscribe ?? pricing?.xu_per_unit_cross ?? 14))
+    : actionType === 'LIKE'
+      ? (mode === 'PAY'
+          ? (pricing?.pay_per_like_vnd ?? 5)
+          : (pricing?.xu_per_like ?? 14))
+      : (mode === 'PAY'
+          ? (pricing?.pay_per_comment_vnd ?? 5)
+          : (pricing?.xu_per_comment ?? 14))
+
+  const totalCost = (typeof pricePerUnit === 'number' ? pricePerUnit : 0) * targetCount
 
   const mutation = useMutation({
     mutationFn: (body: CreateTaskBody) => api.post<{ task_id: string }>('/tasks', body),
@@ -45,43 +126,88 @@ export function CreateTaskPage() {
     },
   })
 
+  const isSubmitDisabled = () => {
+    if (mutation.isPending) return true
+    if (actionType === 'SUBSCRIBE') return channels.length === 0 || !selectedChannel
+    if (actionType === 'LIKE') return !videoId
+    if (actionType === 'COMMENT') return !videoId || !commentTemplate.trim()
+    return false
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
-    const channelId = extractChannelId(channelUrl)
-    if (!channelId) {
-      // Try to submit anyway — server will validate
+    if (actionType === 'SUBSCRIBE') {
+      if (!selectedChannel) return
+      mutation.mutate({
+        channel_url: selectedChannel.channel_url,
+        channel_id: selectedChannel.channel_id,
+        channel_name: selectedChannel.channel_name,
+        channel_avatar: selectedChannel.channel_avatar ?? undefined,
+        target_count: targetCount,
+        task_type: mode,
+        deadline_days: deadlineDays,
+        action_type: 'SUBSCRIBE',
+      })
+    } else if (actionType === 'LIKE') {
+      if (!videoId) return
+      mutation.mutate({
+        channel_url: `https://youtube.com/watch?v=${videoId}`,
+        channel_id: videoId,
+        channel_name: videoTitle || undefined,
+        target_count: targetCount,
+        task_type: mode,
+        deadline_days: deadlineDays,
+        action_type: 'LIKE',
+        video_id: videoId,
+        video_title: videoTitle || undefined,
+      })
+    } else {
+      if (!videoId || !commentTemplate.trim()) return
+      mutation.mutate({
+        channel_url: `https://youtube.com/watch?v=${videoId}`,
+        channel_id: videoId,
+        channel_name: videoTitle || undefined,
+        target_count: targetCount,
+        task_type: mode,
+        deadline_days: deadlineDays,
+        action_type: 'COMMENT',
+        video_id: videoId,
+        video_title: videoTitle || undefined,
+        comment_template: commentTemplate,
+      })
     }
-
-    const body: CreateTaskBody = {
-      channel_url: channelUrl,
-      channel_id: channelId ?? channelUrl,
-      channel_name: channelName || undefined,
-      target_count: targetCount,
-      task_type: mode,
-      deadline_days: deadlineDays,
-      ...(mode === 'PAY'
-        ? { price_per_unit_vnd: pricePerUnit }
-        : { xu_per_unit: xuPerUnit }
-      ),
-    }
-    mutation.mutate(body)
   }
-
-  const totalCost = mode === 'PAY'
-    ? pricePerUnit * targetCount
-    : xuPerUnit * targetCount
 
   return (
     <div className="flex flex-col gap-6">
       <FadeUp>
         <h1 className="display text-xl">Create Task</h1>
         <p className="text-sm mt-0.5" style={{ color: 'var(--color-muted)' }}>
-          Create a task to get subscribers for your YouTube channel.
+          Grow your YouTube presence — subscribers, likes, or comments.
         </p>
       </FadeUp>
 
-      {/* Mode toggle */}
+      {/* Action type toggle */}
+      <FadeUp delay={0.03} className="grid grid-cols-3 gap-2 p-1 rounded-lg" style={{ background: 'var(--color-elevated)' }}>
+        {ACTION_TABS.map(({ type, label, icon }) => (
+          <button
+            key={type}
+            onClick={() => setActionType(type)}
+            className="py-2 px-3 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-1.5"
+            style={{
+              background: actionType === type ? 'var(--color-surface)' : 'transparent',
+              color: actionType === type ? 'var(--color-text)' : 'var(--color-muted)',
+              border: actionType === type ? '1px solid var(--color-border)' : '1px solid transparent',
+            }}
+          >
+            {icon}
+            {label}
+          </button>
+        ))}
+      </FadeUp>
+
+      {/* Mode toggle (PAY / CROSS_SUB) */}
       <FadeUp delay={0.05} className="grid grid-cols-2 gap-2 p-1 rounded-lg" style={{ background: 'var(--color-elevated)' }}>
         {(['PAY', 'CROSS_SUB'] as Mode[]).map((m) => (
           <button
@@ -94,7 +220,7 @@ export function CreateTaskPage() {
               border: mode === m ? '1px solid var(--color-border)' : '1px solid transparent',
             }}
           >
-            {m === 'PAY' ? 'Pay USD (real)' : 'Pay Credits (cross-sub)'}
+            {m === 'PAY' ? 'Pay (real)' : 'Coins (cross-sub)'}
           </button>
         ))}
       </FadeUp>
@@ -103,59 +229,130 @@ export function CreateTaskPage() {
       <FadeUp delay={0.08}>
         <div
           className="flex gap-3 p-3 rounded-md text-sm"
-          style={{ background: mode === 'PAY' ? 'rgb(249 115 22 / 0.08)' : 'rgb(245 158 11 / 0.08)',
-                   borderLeft: `2px solid ${mode === 'PAY' ? 'var(--color-orange)' : 'var(--color-xu)'}`,
-                   paddingLeft: '12px' }}
+          style={{
+            background: mode === 'PAY' ? 'rgb(249 115 22 / 0.08)' : 'rgb(245 158 11 / 0.08)',
+            borderLeft: `2px solid ${mode === 'PAY' ? 'var(--color-orange)' : 'var(--color-xu)'}`,
+          }}
         >
           <Info size={16} color={mode === 'PAY' ? 'var(--color-orange)' : 'var(--color-xu)'} style={{ flexShrink: 0, marginTop: 2 }} />
           <p style={{ color: 'var(--color-muted)' }}>
             {mode === 'PAY'
-              ? 'USD tasks appear first in the feed. Earners receive credits, you pay USD from your wallet.'
-              : 'Credit tasks use credits you have earned. Shown after USD tasks. Max 50 subs per task.'
+              ? `Pay tasks appear first in the feed. Price: ${getPricingDisplay()} (admin-set).`
+              : `Coin tasks use coins you earned. Price: ${getPricingDisplay()} (admin-set). Max 50 units.`
             }
           </p>
         </div>
       </FadeUp>
 
-      {/* Form */}
       <FadeUp delay={0.1}>
         <form onSubmit={handleSubmit} className="card p-5 flex flex-col gap-4">
 
-          {/* Channel URL */}
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium">YouTube Channel URL</label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2">
-                <YoutubeLogo size={16} color="var(--color-sub)" weight="fill" />
-              </span>
-              <input
-                className="input pl-8"
-                placeholder="https://www.youtube.com/channel/UC..."
-                value={channelUrl}
-                onChange={(e) => setChannelUrl(e.target.value)}
-                required
-              />
+          {/* SUBSCRIBE: Channel selector */}
+          {actionType === 'SUBSCRIBE' && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium">YouTube Channel</label>
+              {channelsLoading ? (
+                <div className="h-14 rounded animate-pulse" style={{ background: 'var(--color-elevated)' }} />
+              ) : channels.length === 0 ? (
+                <div className="flex items-center gap-3 p-3 rounded-md border" style={{ borderColor: 'var(--color-danger)', background: 'rgb(239 68 68 / 0.06)' }}>
+                  <Warning size={18} color="var(--color-danger)" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium" style={{ color: 'var(--color-danger)' }}>No YouTube channel linked</p>
+                    <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Link a channel in your profile first.</p>
+                  </div>
+                  <Link to="/profile" className="btn btn-ghost text-xs flex items-center gap-1">
+                    Profile <ArrowRight size={12} />
+                  </Link>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {channels.map(ch => (
+                    <button
+                      key={ch.channel_id}
+                      type="button"
+                      onClick={() => setSelectedChannelId(ch.channel_id)}
+                      className="flex items-center gap-3 p-3 rounded-md border text-left transition-all"
+                      style={{
+                        borderColor: selectedChannelId === ch.channel_id ? 'var(--color-orange)' : 'var(--color-border)',
+                        background: selectedChannelId === ch.channel_id ? 'var(--color-elevated)' : 'transparent',
+                      }}
+                    >
+                      {ch.channel_avatar
+                        ? <img src={ch.channel_avatar} alt="" className="w-9 h-9 rounded-full" />
+                        : <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: 'var(--color-elevated)' }}>
+                            <YoutubeLogo size={18} color="var(--color-sub)" weight="fill" />
+                          </div>
+                      }
+                      <div>
+                        <p className="text-sm font-medium">{ch.channel_name}</p>
+                        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{ch.channel_id}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-            <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-              Supports: /channel/UC..., /@handle, /c/name
-            </p>
-          </div>
+          )}
 
-          {/* Channel name (optional display) */}
+          {/* LIKE / COMMENT: Video URL */}
+          {(actionType === 'LIKE' || actionType === 'COMMENT') && (
+            <>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium">YouTube Video URL</label>
+                <input
+                  className="input"
+                  placeholder="https://youtube.com/watch?v=..."
+                  value={videoUrl}
+                  onChange={(e) => setVideoUrl(e.target.value)}
+                />
+                {videoId && (
+                  <p className="text-xs" style={{ color: 'var(--color-success)' }}>Video ID: {videoId}</p>
+                )}
+                {videoUrl && !videoId && (
+                  <p className="text-xs" style={{ color: 'var(--color-danger)' }}>Invalid YouTube URL</p>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium">Video Title <span className="font-normal" style={{ color: 'var(--color-muted)' }}>(optional)</span></label>
+                <input
+                  className="input"
+                  placeholder="My awesome video..."
+                  value={videoTitle}
+                  onChange={(e) => setVideoTitle(e.target.value)}
+                />
+              </div>
+            </>
+          )}
+
+          {/* COMMENT: Comment template */}
+          {actionType === 'COMMENT' && (
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium">Comment template</label>
+              <textarea
+                className="input"
+                rows={3}
+                placeholder="Great video! Keep it up..."
+                value={commentTemplate}
+                onChange={(e) => setCommentTemplate(e.target.value)}
+              />
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>This exact text will be posted as a comment.</p>
+            </div>
+          )}
+
+          {/* Pricing (read-only) */}
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium">Channel name (display)</label>
-            <input
-              className="input"
-              placeholder="Your channel name"
-              value={channelName}
-              onChange={(e) => setChannelName(e.target.value)}
-            />
+            <label className="text-sm font-medium">Price per unit</label>
+            <div className="input flex items-center" style={{ background: 'var(--color-elevated)', cursor: 'default', color: 'var(--color-muted)' }}>
+              {getPricingDisplay()}
+              <span className="ml-auto text-xs">Admin-set</span>
+            </div>
           </div>
 
           {/* Target count */}
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium">
-              Subscribers needed
+              {actionType === 'SUBSCRIBE' ? 'Subscribers' : actionType === 'LIKE' ? 'Likes' : 'Comments'} needed
               <span className="text-xs ml-2" style={{ color: 'var(--color-muted)' }}>
                 (max {mode === 'PAY' ? 1000 : 50})
               </span>
@@ -171,45 +368,11 @@ export function CreateTaskPage() {
             />
           </div>
 
-          {/* Price */}
-          {mode === 'PAY' ? (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Price per sub (USD cents)</label>
-              <input
-                type="number"
-                className="input"
-                min={1}
-                step={1}
-                value={pricePerUnit}
-                onChange={(e) => setPricePerUnit(parseInt(e.target.value) || 1)}
-                required
-              />
-              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                Earner receives equivalent credits. Minimum $0.01/sub.
-              </p>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Credits per sub</label>
-              <input
-                type="number"
-                className="input"
-                min={14}
-                value={xuPerUnit}
-                onChange={(e) => setXuPerUnit(parseInt(e.target.value) || 14)}
-                required
-              />
-              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
-                Minimum 14 credits/sub (platform keeps 4 cr spread).
-              </p>
-            </div>
-          )}
-
-          {/* Deadline */}
+          {/* Duration */}
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium">Duration</label>
-            <div className="grid grid-cols-4 gap-2">
-              {[1, 3, 7, 14].map((d) => (
+            <div className="grid grid-cols-3 gap-2">
+              {[3, 7, 14].map((d) => (
                 <button
                   key={d}
                   type="button"
@@ -221,7 +384,7 @@ export function CreateTaskPage() {
                     color: deadlineDays === d ? 'var(--color-text)' : 'var(--color-muted)',
                   }}
                 >
-                  {d}d
+                  {d} days
                 </button>
               ))}
             </div>
@@ -233,16 +396,16 @@ export function CreateTaskPage() {
             <div>
               <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Total escrow</p>
               <p className="mono font-bold text-lg" style={{ color: mode === 'PAY' ? 'var(--color-orange)' : 'var(--color-xu)' }}>
-                {totalCost.toLocaleString('en-US')}
+                {totalCost.toLocaleString()}
                 <span className="text-sm font-normal ml-1" style={{ color: 'var(--color-muted)' }}>
-                  {mode === 'PAY' ? '¢ USD' : 'cr'}
+                  {mode === 'PAY' ? 'USD' : 'coin'}
                 </span>
               </p>
             </div>
             <button
               type="submit"
               className="btn-primary"
-              disabled={mutation.isPending}
+              disabled={isSubmitDisabled()}
             >
               {mutation.isPending ? 'Creating...' : 'Create task'}
             </button>
@@ -255,6 +418,38 @@ export function CreateTaskPage() {
           )}
         </form>
       </FadeUp>
+
+      {/* Video preview for LIKE/COMMENT */}
+      {(actionType === 'LIKE' || actionType === 'COMMENT') && videoId && (
+        <FadeUp delay={0.12}>
+          <div className="card p-4 flex items-center gap-3">
+            <img
+              src={`https://img.youtube.com/vi/${videoId}/mqdefault.jpg`}
+              alt="Video thumbnail"
+              className="w-24 h-16 rounded object-cover flex-shrink-0"
+            />
+            <div className="min-w-0">
+              <p className="text-sm font-medium truncate">{videoTitle || 'Video preview'}</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>ID: {videoId}</p>
+              {actionType === 'COMMENT' && commentTemplate && (
+                <p className="text-xs mt-1 italic" style={{ color: 'var(--color-muted)' }}>
+                  "{commentTemplate.slice(0, 60)}{commentTemplate.length > 60 ? '…' : ''}"
+                </p>
+              )}
+            </div>
+          </div>
+        </FadeUp>
+      )}
+
+      {/* Missing channel warning for SUBSCRIBE */}
+      {actionType === 'SUBSCRIBE' && channels.length === 0 && !channelsLoading && (
+        <FadeUp delay={0.12}>
+          <p className="text-xs text-center" style={{ color: 'var(--color-muted)' }}>
+            You need a linked YouTube channel to create subscribe tasks.{' '}
+            <Link to="/profile" style={{ color: 'var(--color-link)' }}>Link now →</Link>
+          </p>
+        </FadeUp>
+      )}
     </div>
   )
 }

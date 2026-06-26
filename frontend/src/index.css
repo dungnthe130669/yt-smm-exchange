@@ -179,3 +179,41 @@ body {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* Light theme overrides */
+[data-theme="light"] {
+  --color-base:         #ffffff;
+  --color-surface:      #f9f9f9;
+  --color-elevated:     #f2f2f2;
+  --color-border:       #e5e5e5;
+  --color-border-hover: #cccccc;
+  --color-text:         #0f0f0f;
+  --color-muted:        #606060;
+  --color-subtle:       #aaaaaa;
+  --color-orange:       #f97316;
+  --color-xu:           #d97706;
+  --color-sub:          #cc0000;
+  --color-success:      #16a34a;
+  --color-danger:       #cc0000;
+  --color-link:         #065fd4;
+  color-scheme: light;
+}
+
+[data-theme="light"] body {
+  background: var(--color-base);
+  color: var(--color-text);
+}
+
+[data-theme="light"] .input {
+  background: #ffffff;
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+[data-theme="light"] .btn-ghost {
+  color: var(--color-text);
+}
+
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: var(--color-border-hover);
+}

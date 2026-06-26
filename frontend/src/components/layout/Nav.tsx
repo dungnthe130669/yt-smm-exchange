@@ -1,19 +1,46 @@
 import { Link, useLocation } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 import {
-  House, ListBullets, Wallet, YoutubeLogo, User
+  Lightning, ListBullets, Wallet, YoutubeLogo, User, ShieldCheck, Sun, Moon
 } from '@phosphor-icons/react'
+import { api } from '../../lib/api'
+import { toggleTheme, getStoredTheme } from '../../lib/theme'
 
-const NAV = [
-  { to: '/',        icon: House,       label: 'Feed' },
+interface Session {
+  user: { id: string; email: string; role?: string } | null
+}
+
+const BASE_NAV = [
+  { to: '/',         icon: Lightning,   label: 'Earn' },
   { to: '/my-tasks', icon: ListBullets, label: 'Tasks' },
-  { to: '/wallet',  icon: Wallet,      label: 'Wallet' },
-  { to: '/create',  icon: YoutubeLogo, label: 'Create' },
-  { to: '/profile', icon: User,        label: 'Profile' },
+  { to: '/wallet',   icon: Wallet,      label: 'Wallet' },
+  { to: '/create',   icon: YoutubeLogo, label: 'Create' },
+  { to: '/profile',  icon: User,        label: 'Profile' },
 ]
+
+function useNavItems() {
+  const { data } = useQuery({
+    queryKey: ['me'],
+    queryFn: () => api.get<Session>('/me'),
+    staleTime: 60_000,
+  })
+  const isAdmin = data?.user?.role === 'admin'
+  return isAdmin
+    ? [...BASE_NAV, { to: '/admin', icon: ShieldCheck, label: 'Admin' }]
+    : BASE_NAV
+}
 
 // Desktop sidebar
 export function Sidebar() {
   const { pathname } = useLocation()
+  const nav = useNavItems()
+  const [theme, setTheme] = useState(getStoredTheme)
+
+  const handleToggle = () => {
+    const next = toggleTheme()
+    setTheme(next)
+  }
 
   return (
     <aside
@@ -37,7 +64,7 @@ export function Sidebar() {
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 flex flex-col gap-0.5">
-        {NAV.map(({ to, icon: Icon, label }) => {
+        {nav.map(({ to, icon: Icon, label }) => {
           const active = pathname === to
           return (
             <Link
@@ -61,6 +88,22 @@ export function Sidebar() {
         })}
       </nav>
 
+      {/* Theme toggle */}
+      <div className="px-3 py-2 border-t" style={{ borderColor: 'var(--color-border)' }}>
+        <button
+          onClick={handleToggle}
+          className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium w-full transition-colors"
+          style={{ color: 'var(--color-muted)' }}
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {theme === 'dark'
+            ? <Sun size={17} />
+            : <Moon size={17} />
+          }
+          {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+        </button>
+      </div>
+
       {/* Version */}
       <div className="px-5 py-4 text-xs" style={{ color: 'var(--color-subtle)' }}>
         MVP v0.1
@@ -72,13 +115,14 @@ export function Sidebar() {
 // Mobile bottom nav
 export function BottomNav() {
   const { pathname } = useLocation()
+  const nav = useNavItems()
 
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 flex border-t md:hidden"
       style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
     >
-      {NAV.map(({ to, icon: Icon, label }) => {
+      {nav.map(({ to, icon: Icon, label }) => {
         const active = pathname === to
         return (
           <Link
