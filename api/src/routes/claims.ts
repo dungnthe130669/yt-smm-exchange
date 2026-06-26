@@ -20,7 +20,7 @@ claimRoutes.post('/:taskId/claim', async (c) => {
 
   // Load task
   const task = await c.env.DB.prepare(`SELECT * FROM tasks WHERE id = ? AND status = 'OPEN'`)
-    .bind(taskId).first<{ channel_id: string; buyer_id: string; delivered_count: number; target_count: number; max_providers: number }>()
+    .bind(taskId).first<{ channel_id: string; buyer_id: string; delivered_count: number; target_count: number; max_providers: number; action_type: string }>()
   if (!task) return c.json({ error: 'TASK_NOT_FOUND', message: 'Task not found or closed' }, 404)
 
   // Cannot claim own task
@@ -38,12 +38,15 @@ claimRoutes.post('/:taskId/claim', async (c) => {
 
   // ─── Fraud checks ─────────────────────────────────────────────────────────
 
-  // 1. IP never subbed this channel
-  const ipChannelDup = await c.env.DB.prepare(
-    `SELECT 1 FROM ip_task_log WHERE ip_hash = ? AND channel_id = ?`
-  ).bind(ipHash, task.channel_id).first()
-  if (ipChannelDup) {
-    return c.json({ error: 'IP_CHANNEL_DUPLICATE', message: 'This IP has already subscribed to this channel' }, 429)
+  // 1. IP+channel dedup — only for SUBSCRIBE tasks (LIKE/COMMENT use video_id as channel_id, different dedup logic)
+  const actionType = task.action_type ?? 'SUBSCRIBE'
+  if (actionType === 'SUBSCRIBE') {
+    const ipChannelDup = await c.env.DB.prepare(
+      `SELECT 1 FROM ip_task_log WHERE ip_hash = ? AND channel_id = ?`
+    ).bind(ipHash, task.channel_id).first()
+    if (ipChannelDup) {
+      return c.json({ error: 'IP_CHANNEL_DUPLICATE', message: 'This IP has already subscribed to this channel' }, 429)
+    }
   }
 
   // 2. IP daily limit (KV — configurable via admin pricing, 0 = disabled)
@@ -75,9 +78,9 @@ claimRoutes.post('/:taskId/claim', async (c) => {
     return c.json({ error: 'TOO_MANY_ACTIVE_CLAIMS', message: 'You have 3 pending tasks — complete or wait for them to expire before claiming more' }, 429)
   }
 
-  // 5. User already claimed this task
+  // 5. User already claimed this task (active claim only)
   const existingClaim = await c.env.DB.prepare(
-    `SELECT 1 FROM task_claims WHERE task_id = ? AND claimer_id = ?`
+    `SELECT 1 FROM task_claims WHERE task_id = ? AND claimer_id = ? AND status NOT IN ('REJECTED','EXPIRED')`
   ).bind(taskId, userId).first()
   if (existingClaim) {
     return c.json({ error: 'ALREADY_CLAIMED', message: 'You have already claimed this task' }, 400)

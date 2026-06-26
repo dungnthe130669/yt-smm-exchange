@@ -57,7 +57,39 @@ app.get('/api/me', async (c) => {
 app.post('/__cron/xu-unlock', cronHandler)
 
 // Health check
-app.get('/health', (c) => c.json({ ok: true, ts: Date.now() }))
+app.get('/api/health', (c) => c.json({ ok: true, ts: Date.now() }))
+
+// TEMP DEBUG: test refresh token for a channel — REMOVE BEFORE PROD LAUNCH
+app.get('/api/debug/refresh-test', async (c) => {
+  const channelId = c.req.query('channel_id')
+  if (!channelId) return c.json({ error: 'channel_id required' }, 400)
+  const row = await c.env.DB.prepare(
+    `SELECT refresh_token FROM user_linked_channels WHERE channel_id = ? LIMIT 1`
+  ).bind(channelId).first<{ refresh_token: string }>()
+  if (!row) return c.json({ error: 'channel not found' }, 404)
+  try {
+    const res = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: c.env.GOOGLE_CLIENT_ID,
+        client_secret: c.env.GOOGLE_CLIENT_SECRET,
+        refresh_token: row.refresh_token,
+        grant_type: 'refresh_token',
+      }),
+    })
+    const data = await res.json<Record<string, unknown>>()
+    return c.json({
+      status: res.status,
+      has_access_token: 'access_token' in data,
+      error: data.error ?? null,
+      error_description: data.error_description ?? null,
+      scope: data.scope ?? null,
+    })
+  } catch (e) {
+    return c.json({ error: String(e) }, 500)
+  }
+})
 
 // 404 fallback
 app.notFound((c) => c.json({ error: 'NOT_FOUND', message: 'Route not found' }, 404))

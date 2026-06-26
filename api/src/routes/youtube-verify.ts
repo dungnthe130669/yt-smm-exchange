@@ -316,17 +316,15 @@ youtubeVerifyRoutes.post('/:claimId/perform', async (c) => {
     if (!commentResult.ok) {
       return c.json({ error: 'ACTION_FAILED', message: `Comment failed: ${commentResult.error}` }, 400)
     }
-    const verified = commentResult.comment_id
-      ? await verifyComment(accessToken, commentResult.comment_id)
-      : false
-    if (!verified) {
-      return c.json({ error: 'VERIFY_FAILED', message: 'Comment could not be confirmed. Try again.' }, 400)
+    // comment_id returned = proof comment was posted (YouTube indexes async, skip re-verify)
+    if (!commentResult.comment_id) {
+      return c.json({ error: 'VERIFY_FAILED', message: 'Comment posted but no ID returned. Try again.' }, 400)
     }
     if (claim.status === 'CLAIMED') {
       await c.env.DB.prepare(`UPDATE task_claims SET status = 'SUBMITTED', submitted_at = ? WHERE id = ?`).bind(now, claimId).run()
     }
     await c.env.DB.prepare(`UPDATE task_claims SET status = 'VERIFIED', verified_at = ?, youtube_channel_id = ? WHERE id = ?`).bind(now, earnerChannelId, claimId).run()
-    await c.env.DB.prepare(`INSERT OR IGNORE INTO task_claim_results (claim_id, comment_id) VALUES (?,?)`).bind(claimId, commentResult.comment_id ?? '').run()
+    await c.env.DB.prepare(`INSERT OR IGNORE INTO task_claim_results (claim_id, comment_id) VALUES (?,?)`).bind(claimId, commentResult.comment_id).run()
   }
 
   // 6. Credit coins + common bookkeeping
