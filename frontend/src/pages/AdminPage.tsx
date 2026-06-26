@@ -11,26 +11,26 @@ interface AdminStats {
   users: number
   tasks: Array<{ cnt: number; status: string }>
   claims: Array<{ cnt: number; status: string }>
-  wallets: { total_xu: number; total_pending: number }
+  wallets: { total_coin: number; total_coin_pending: number }
 }
 
 interface AdminUser {
   id: string; name: string; email: string; role: string
   group_id: string | null; group_name: string; max_channels: number
   linked_channels_count: number
-  created_at: number; xu_balance: number; xu_pending: number; balance_vnd: number
+  created_at: number; coin_balance: number; coin_pending: number; balance_usd_micro: number
 }
 
 interface AdminTask {
   id: string; channel_name: string | null; channel_id: string
   task_type: string; status: string; target_count: number; delivered_count: number
-  buyer_email: string; created_at: number; price_per_unit_vnd: number; xu_per_unit: number
+  buyer_email: string; created_at: number; price_per_unit_usd_micro: number; coin_per_unit: number
 }
 
 interface AdminClaim {
   id: string; task_id: string; claimer_email: string
   channel_name: string | null; task_type: string
-  status: string; claimed_at: number; xu_amount: number
+  status: string; claimed_at: number; coin_amount: number
   youtube_channel_id: string | null
 }
 
@@ -70,8 +70,8 @@ function StatsTab() {
         <StatCard label="Total Tasks" value={taskTotal} />
         <StatCard label="Total Claims" value={claimTotal} />
         <StatCard label="Verified Claims" value={claimVerified} />
-        <StatCard label="Total Coins Circulating" value={(data?.wallets?.total_xu ?? 0).toLocaleString()} />
-        <StatCard label="Coins Pending" value={(data?.wallets?.total_pending ?? 0).toLocaleString()} />
+        <StatCard label="Total Coins Circulating" value={(data?.wallets?.total_coin ?? 0).toLocaleString()} />
+        <StatCard label="Coins Pending" value={(data?.wallets?.total_coin_pending ?? 0).toLocaleString()} />
       </div>
 
       <div className="grid md:grid-cols-2 gap-3">
@@ -174,7 +174,7 @@ function UsersTab() {
                   <td className="px-4 py-2.5 text-xs mono" style={{ color: 'var(--color-muted)' }}>
                     {u.linked_channels_count} / {u.max_channels}
                   </td>
-                  <td className="px-4 py-2.5 mono text-xs">{u.xu_balance} coin</td>
+                  <td className="px-4 py-2.5 mono text-xs">{u.coin_balance} coin</td>
                   <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--color-muted)' }}>
                     {new Date(u.created_at * 1000).toLocaleDateString()}
                   </td>
@@ -358,7 +358,7 @@ function ClaimsTab() {
                   <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--color-muted)' }}>{cl.channel_name ?? '—'}</td>
                   <td className="px-4 py-2.5"><span className="badge badge-gray">{cl.task_type}</span></td>
                   <td className="px-4 py-2.5"><span className="badge badge-gray">{cl.status}</span></td>
-                  <td className="px-4 py-2.5 mono text-xs">{cl.xu_amount}</td>
+                  <td className="px-4 py-2.5 mono text-xs">{cl.coin_amount}</td>
                   <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--color-muted)' }}>
                     {new Date(cl.claimed_at * 1000).toLocaleDateString()}
                   </td>
@@ -397,7 +397,7 @@ const PRICING_FIELDS = [
   { key: 'xu_per_subscribe',     label: 'Coin reward — Subscribe' },
   { key: 'xu_per_like',          label: 'Coin reward — Like' },
   { key: 'xu_per_comment',       label: 'Coin reward — Comment' },
-  { key: 'xu_per_unit_cross',    label: 'Coin reward — Cross-sub (legacy)' },
+  { key: 'xu_per_unit_cross',    label: 'Coin reward — Cross-sub (coin_per_unit_cross)' },
   { key: 'cooldown_seconds',     label: 'Per-task cooldown (seconds)' },
   { key: 'task_cooldown_seconds', label: 'Between-task cooldown (seconds)' },
 ] as const

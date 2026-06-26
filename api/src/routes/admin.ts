@@ -14,7 +14,7 @@ adminRoutes.get('/stats', async (c) => {
     c.env.DB.prepare(`SELECT COUNT(*) as cnt FROM "user"`).first<{ cnt: number }>(),
     c.env.DB.prepare(`SELECT COUNT(*) as cnt, status FROM tasks GROUP BY status`).all<{ cnt: number; status: string }>(),
     c.env.DB.prepare(`SELECT COUNT(*) as cnt, status FROM task_claims GROUP BY status`).all<{ cnt: number; status: string }>(),
-    c.env.DB.prepare(`SELECT SUM(xu_balance) as total_xu, SUM(xu_pending) as total_pending FROM wallets`).first<{ total_xu: number; total_pending: number }>(),
+    c.env.DB.prepare(`SELECT SUM(coin_balance) as total_coin, SUM(coin_pending) as total_pending FROM wallets`).first<{ total_coin: number; total_pending: number }>(),
   ])
 
   return c.json({
@@ -44,7 +44,7 @@ adminRoutes.get('/users', async (c) => {
              COALESCE(g.name, 'Normal User') as group_name,
              COALESCE(g.max_channels, 10) as max_channels,
              u.createdAt as created_at,
-             w.xu_balance, w.xu_pending, w.balance_vnd,
+             w.coin_balance, w.coin_pending, w.balance_usd_micro,
              (SELECT COUNT(*) FROM user_linked_channels ulc WHERE ulc.user_id = u.id) as linked_channels_count
       FROM "user" u
       LEFT JOIN wallets w ON w.user_id = u.id
@@ -156,7 +156,8 @@ adminRoutes.get('/pricing', async (c) => {
   const defaults = {
     pay_price_per_unit_vnd: 5,
     xu_per_unit_pay: 10,
-    xu_per_unit_cross: 14,
+    xu_per_unit_cross: 14,   // legacy key — keep for backward compat
+    coin_per_unit_cross: 14, // new key
     cooldown_seconds: 0,
     task_cooldown_seconds: 30,
     xu_per_subscribe: 10,
@@ -178,7 +179,8 @@ adminRoutes.put('/pricing', async (c) => {
   const defaults = {
     pay_price_per_unit_vnd: 5,
     xu_per_unit_pay: 10,
-    xu_per_unit_cross: 14,
+    xu_per_unit_cross: 14,   // legacy key — keep for backward compat
+    coin_per_unit_cross: 14, // new key
     cooldown_seconds: 0,
     task_cooldown_seconds: 30,
     xu_per_subscribe: 10,

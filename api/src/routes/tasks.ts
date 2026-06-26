@@ -59,7 +59,8 @@ taskRoutes.get('/pricing', async (c) => {
     xu_per_subscribe: 10,
     xu_per_like: 5,
     xu_per_comment: 15,
-    xu_per_unit_cross: 14,
+    xu_per_unit_cross: 14,   // legacy key — keep for backward compat
+    coin_per_unit_cross: 14, // new key
   }
   const config = raw ? { ...defaults, ...JSON.parse(raw) } : defaults
   return c.json(config)
@@ -167,34 +168,37 @@ taskRoutes.post('/', async (c) => {
     return c.json({ error: 'INVALID_DEADLINE', message: 'Duration must be 3, 7, or 14 days' }, 400)
   }
 
-  // Read admin-set pricing
+  // Read admin-set pricing — support both old and new KV keys
   const pricingRaw = await c.env.RATE_KV.get('pricing_config')
   const pricing = pricingRaw ? JSON.parse(pricingRaw) : {}
   const defaultPricing = {
     xu_per_subscribe: 10, xu_per_like: 5, xu_per_comment: 15,
     xu_per_unit_cross: 14, // legacy fallback
+    coin_per_unit_cross: 14, // new key fallback
   }
   const p = { ...defaultPricing, ...pricing }
+  // Prefer new key, fall back to old
+  if (!p.coin_per_unit_cross) p.coin_per_unit_cross = p.xu_per_unit_cross
 
-  const xuPerUnit = actionType === 'SUBSCRIBE' ? p.xu_per_subscribe
+  const coinPerUnit = actionType === 'SUBSCRIBE' ? p.xu_per_subscribe
     : actionType === 'LIKE' ? p.xu_per_like
     : p.xu_per_comment
 
   // Always coin escrow (CROSS_SUB logic)
-  const escrowXu = xuPerUnit * Math.floor(body.target_count)
+  const escrowCoinAmount = coinPerUnit * Math.floor(body.target_count)
 
   // Atomic debit: UPDATE only succeeds if balance is sufficient
   const debitResult = await c.env.DB.prepare(`
-    UPDATE wallets SET xu_balance = xu_balance - ?
-    WHERE user_id = ? AND xu_balance >= ?
-  `).bind(escrowXu, userId, escrowXu).run()
+    UPDATE wallets SET coin_balance = coin_balance - ?
+    WHERE user_id = ? AND coin_balance >= ?
+  `).bind(escrowCoinAmount, userId, escrowCoinAmount).run()
 
   if (debitResult.meta.changes === 0) {
     // Either wallet doesn't exist or insufficient balance
-    const wallet = await c.env.DB.prepare(`SELECT xu_balance FROM wallets WHERE user_id = ?`)
-      .bind(userId).first<{ xu_balance: number }>()
-    const bal = wallet?.xu_balance ?? 0
-    return c.json({ error: 'INSUFFICIENT_COINS', message: `Insufficient coin balance. You have ${bal} coins, need ${escrowXu}.` }, 400)
+    const wallet = await c.env.DB.prepare(`SELECT coin_balance FROM wallets WHERE user_id = ?`)
+      .bind(userId).first<{ coin_balance: number }>()
+    const bal = wallet?.coin_balance ?? 0
+    return c.json({ error: 'INSUFFICIENT_COINS', message: `Insufficient coin balance. You have ${bal} coins, need ${escrowCoinAmount}.` }, 400)
   }
 
   const taskId = crypto.randomUUID()
@@ -203,21 +207,21 @@ taskRoutes.post('/', async (c) => {
   await c.env.DB.batch([
     c.env.DB.prepare(`
       INSERT INTO tasks (id, buyer_id, channel_id, channel_url, channel_name, channel_avatar,
-        target_count, task_type, price_per_unit_vnd, xu_per_unit,
-        escrow_vnd, escrow_xu, max_providers, priority, deadline,
+        target_count, task_type, price_per_unit_usd_micro, coin_per_unit,
+        escrow_usd_micro, escrow_coin, max_providers, priority, deadline,
         action_type, video_id, video_title, video_thumbnail, comment_template)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `).bind(taskId, userId, channelId, channelUrl, body.channel_name ?? null,
         body.channel_avatar ?? null,
-        Math.floor(body.target_count), 'CROSS_SUB', 0, xuPerUnit,
-        0, escrowXu, 50, 1, deadline,
+        Math.floor(body.target_count), 'CROSS_SUB', 0, coinPerUnit,
+        0, escrowCoinAmount, 50, 1, deadline,
         actionType, body.video_id ?? null, body.video_title ?? null,
         body.video_thumbnail ?? null, body.comment_template ?? null),
 
     c.env.DB.prepare(`
       INSERT INTO wallet_txns (id, user_id, type, amount, currency, ref_id, note)
       VALUES (?,?,?,?,?,?,?)
-    `).bind(crypto.randomUUID(), userId, 'ESCROW_LOCK', escrowXu, 'XU', taskId, 'Coin escrow for task creation'),
+    `).bind(crypto.randomUUID(), userId, 'ESCROW_LOCK', escrowCoinAmount, 'COIN', taskId, 'Coin escrow for task creation'),
   ])
 
   return c.json({ task_id: taskId }, 201)

@@ -8,8 +8,8 @@ import { FadeUp, StaggerList, StaggerItem } from '../components/ui/Motion'
 const TXN_LABEL: Record<string, { label: string; sign: '+' | '-' | '~'; color: string }> = {
   EARN:            { label: 'Earn coins',  sign: '+', color: 'var(--color-success)' },
   SPEND:           { label: 'Spend coins', sign: '-', color: 'var(--color-danger)'  },
-  BUY_XU:         { label: 'Buy coins',   sign: '+', color: 'var(--color-xu)'      },
-  BUY_VND:        { label: 'Deposit USD',  sign: '+', color: 'var(--color-success)' },
+  BUY_COIN:        { label: 'Buy coins',   sign: '+', color: 'var(--color-xu)'      },
+  BUY_USD:         { label: 'Deposit USD',  sign: '+', color: 'var(--color-success)' },
   CLAW_BACK:      { label: 'Claw back',    sign: '-', color: 'var(--color-danger)'  },
   REFUND:         { label: 'Refund',       sign: '+', color: 'var(--color-success)' },
   ESCROW_LOCK:    { label: 'Escrow lock',  sign: '-', color: 'var(--color-muted)'   },
@@ -50,7 +50,7 @@ export function WalletPage() {
             <div>
               <p className="text-xs" style={{ color: 'var(--color-muted)' }}>USD Deposit Balance</p>
               <p className="mono font-medium text-sm" style={{ color: 'var(--color-success)' }}>
-                {(wallet.balance_vnd ?? 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                ${((wallet.balance_usd_micro ?? 0) / 1_000_000).toFixed(2)} USD
               </p>
             </div>
             <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--color-elevated)', color: 'var(--color-muted)' }}>

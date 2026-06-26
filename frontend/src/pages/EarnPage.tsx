@@ -10,8 +10,8 @@ interface Task {
   channel_name: string | null
   channel_avatar: string | null
   channel_url: string
-  xu_per_unit: number
-  price_per_unit_vnd: number
+  coin_per_unit: number
+  price_per_unit_usd_micro: number
   task_type: string
   target_count: number
   delivered_count: number
@@ -249,7 +249,7 @@ export function EarnPage() {
             <div className="flex items-center justify-between p-3 rounded-lg" style={{ background: 'var(--color-elevated)' }}>
               <span className="text-sm" style={{ color: 'var(--color-muted)' }}>You will earn</span>
               <div className="flex items-center gap-1">
-                <span className="mono font-bold text-xl" style={{ color: 'var(--color-xu)' }}>+{task.xu_per_unit}</span>
+                <span className="mono font-bold text-xl" style={{ color: 'var(--color-xu)' }}>+{task.coin_per_unit}</span>
                 <span className="text-sm" style={{ color: 'var(--color-muted)' }}>coins</span>
               </div>
             </div>
