@@ -66,13 +66,13 @@ claimRoutes.post('/:taskId/claim', async (c) => {
     return c.json({ error: 'ACCOUNT_DAILY_LIMIT', message: 'Daily task limit reached' }, 429)
   }
 
-  // 4. Max concurrent active claims
+  // 4. Max concurrent active claims — count CLAIMED only (SUBMITTED = already performing)
   const activeClaims = await c.env.DB.prepare(
     `SELECT COUNT(*) as cnt FROM task_claims
      WHERE claimer_id = ? AND status = 'CLAIMED'`
   ).bind(userId).first<{ cnt: number }>()
   if ((activeClaims?.cnt ?? 0) >= MAX_CONCURRENT_CLAIMS) {
-    return c.json({ error: 'TOO_MANY_ACTIVE_CLAIMS', message: 'Complete your active claims before taking more' }, 429)
+    return c.json({ error: 'TOO_MANY_ACTIVE_CLAIMS', message: 'You have 3 pending tasks — complete or wait for them to expire before claiming more' }, 429)
   }
 
   // 5. User already claimed this task
@@ -180,7 +180,8 @@ claimRoutes.get('/my', async (c) => {
 
   const userId = c.get('userId')!
   const claims = await c.env.DB.prepare(`
-    SELECT tc.*, t.channel_id, t.channel_url, t.channel_name, t.task_type, t.coin_per_unit, t.action_type
+    SELECT tc.*, t.channel_id, t.channel_url, t.channel_name, t.coin_per_unit,
+           t.action_type, t.video_id, t.video_title
     FROM task_claims tc
     JOIN tasks t ON t.id = tc.task_id
     WHERE tc.claimer_id = ?
