@@ -105,16 +105,21 @@ export function EarnPage() {
       // Step 1: claim task
       const claimRes = await api.post<{ claim_id: string }>(`/claims/${task.id}/claim`, {})
 
-      // Step 2: perform action + verify
-      const verifyRes = await api.post<{ ok: boolean; xu_earned: number }>(
-        `/youtube-verify/${claimRes.claim_id}/perform`,
-        { channel_id: channelId }
-      )
-
-      return verifyRes
+      // Step 2: perform action + verify (claim → VERIFIED in one shot)
+      try {
+        const verifyRes = await api.post<{ ok: boolean; coins_earned: number }>(
+          `/youtube-verify/${claimRes.claim_id}/perform`,
+          { channel_id: channelId }
+        )
+        return verifyRes
+      } catch (err) {
+        // Auto-expire the stuck claim so concurrent limit isn't hit next time
+        try { await api.delete(`/claims/${claimRes.claim_id}`) } catch { /* ignore */ }
+        throw err
+      }
     },
     onSuccess: (res) => {
-      setXuEarned(res.xu_earned ?? 0)
+      setXuEarned(res.coins_earned ?? 0)
       setEarnState('success')
       qc.invalidateQueries({ queryKey: ['wallet'] })
       qc.invalidateQueries({ queryKey: ['my-tasks'] })
@@ -123,6 +128,7 @@ export function EarnPage() {
       const e = err as { message?: string; error?: string }
       setErrorMsg(e.message ?? 'Something went wrong. Try again.')
       setEarnState('error')
+      qc.invalidateQueries({ queryKey: ['my-tasks'] })
     },
   })
 

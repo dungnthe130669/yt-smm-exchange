@@ -191,3 +191,27 @@ claimRoutes.get('/my', async (c) => {
 
   return c.json({ claims: claims.results })
 })
+
+// DELETE /api/claims/:claimId — earner abandons a CLAIMED task (not yet performed)
+claimRoutes.delete('/:claimId', async (c) => {
+  const guard = requireAuth(c)
+  if (guard) return guard
+
+  const userId = c.get('userId')!
+  const claimId = c.req.param('claimId')
+
+  const claim = await c.env.DB.prepare(
+    `SELECT id, status FROM task_claims WHERE id = ? AND claimer_id = ?`
+  ).bind(claimId, userId).first<{ id: string; status: string }>()
+
+  if (!claim) return c.json({ error: 'NOT_FOUND', message: 'Claim not found' }, 404)
+  if (!['CLAIMED', 'SUBMITTED'].includes(claim.status)) {
+    return c.json({ error: 'ALREADY_RESOLVED', message: 'Claim already completed or expired' }, 400)
+  }
+
+  await c.env.DB.prepare(
+    `UPDATE task_claims SET status = 'EXPIRED' WHERE id = ?`
+  ).bind(claimId).run()
+
+  return c.json({ ok: true })
+})
