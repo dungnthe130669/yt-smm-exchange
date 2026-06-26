@@ -11,6 +11,8 @@ import { claimRoutes } from './routes/claims'
 import { walletRoutes } from './routes/wallet'
 import { cronHandler } from './routes/cron'
 import { youtubeVerifyRoutes } from './routes/youtube-verify'
+import { youtubeLinkRoutes } from './routes/youtube-link'
+import { adminRoutes } from './routes/admin'
 
 const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>()
 
@@ -41,6 +43,15 @@ app.route('/api/tasks', taskRoutes)
 app.route('/api/claims', claimRoutes)
 app.route('/api/wallet', walletRoutes)
 app.route('/api/youtube-verify', youtubeVerifyRoutes)
+app.route('/api/youtube-link', youtubeLinkRoutes)
+app.route('/api/admin', adminRoutes)
+
+// GET /api/me — current user with role from DB (BA get-session doesn't include custom columns)
+app.get('/api/me', async (c) => {
+  const user = c.get('user')
+  if (!user) return c.json({ user: null })
+  return c.json({ user })
+})
 
 // Cron trigger handler (CF Cron: every 6h)
 app.post('/__cron/xu-unlock', cronHandler)
@@ -49,7 +60,7 @@ app.post('/__cron/xu-unlock', cronHandler)
 app.get('/health', (c) => c.json({ ok: true, ts: Date.now() }))
 
 // 404 fallback
-app.notFound((c) => c.json({ error: 'NOT_FOUND', message: 'Route không tồn tại' }, 404))
+app.notFound((c) => c.json({ error: 'NOT_FOUND', message: 'Route not found' }, 404))
 
 // Error fallback
 app.onError((err, c) => {
