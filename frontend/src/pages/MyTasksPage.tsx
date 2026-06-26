@@ -30,9 +30,9 @@ interface ClaimRow {
 
 function coinLabel(coinStatus: string, coinAmount: number): { text: string; color: string } {
   if (coinStatus === 'CREDITED') return { text: `+${coinAmount} coins`, color: 'var(--color-success)' }
-  if (coinStatus === 'LOCKED')   return { text: `+${coinAmount} (verifying…)`, color: 'var(--color-orange)' }
   if (coinStatus === 'CLAWED_BACK') return { text: 'Reversed', color: 'var(--color-danger)' }
-  // VERIFIED but coin_status NONE = credited to pending, not yet settled
+  // LOCKED = legacy, will be migrated by cron
+  if (coinStatus === 'LOCKED') return { text: `+${coinAmount} coins (processing…)`, color: 'var(--color-muted)' }
   return { text: `+${coinAmount} pending`, color: 'var(--color-muted)' }
 }
 
@@ -133,7 +133,7 @@ export function MyTasksPage() {
 
           {/* Coin status legend */}
           <p className="text-xs text-center" style={{ color: 'var(--color-muted)' }}>
-            Coins are credited to your wallet after a 48h verification window.
+            Coins are credited to your wallet instantly after verification.
           </p>
         </section>
       ) : (

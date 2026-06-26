@@ -198,7 +198,7 @@ export function EarnPage() {
             <div>
               <p className="font-bold text-lg">{getSuccessLabel()}</p>
               <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
-                  +<span className="mono font-bold" style={{ color: 'var(--color-xu)' }}>{xuEarned}</span> coins locked for 48h
+                  +<span className="mono font-bold" style={{ color: 'var(--color-xu)' }}>{xuEarned}</span> coins added to your balance
               </p>
             </div>
             <button className="btn-primary flex items-center gap-2" onClick={handleNext}>

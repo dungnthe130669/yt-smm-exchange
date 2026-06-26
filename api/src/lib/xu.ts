@@ -3,8 +3,7 @@
 
 import type { Env } from '../bindings'
 
-// Credit coins to earner after verify (moves to LOCKED, not CREDITED yet)
-// Called immediately after OAuth verify passes
+// Credit coins to earner immediately after verify passes (CREDITED — no lock period)
 export async function creditCoinPending(
   db: D1Database,
   claimId: string,
@@ -15,11 +14,11 @@ export async function creditCoinPending(
   await db.batch([
     db.prepare(`
       UPDATE task_claims
-      SET coin_status = 'LOCKED', coin_amount = ?, coin_locked_at = ?
+      SET coin_status = 'CREDITED', coin_amount = ?, coin_locked_at = ?
       WHERE id = ?
     `).bind(coinAmount, now, claimId),
     db.prepare(`
-      UPDATE wallets SET coin_pending = coin_pending + ? WHERE user_id = ?
+      UPDATE wallets SET coin_balance = coin_balance + ? WHERE user_id = ?
     `).bind(coinAmount, claimerId),
     db.prepare(`
       INSERT INTO wallet_txns (id, user_id, type, amount, currency, ref_id, note)
@@ -27,7 +26,7 @@ export async function creditCoinPending(
     `).bind(
       crypto.randomUUID(), claimerId, 'EARN',
       coinAmount, 'COIN', claimId,
-      'Coins pending — waiting 48h unlock'
+      'Coins earned'
     ),
   ])
 }
