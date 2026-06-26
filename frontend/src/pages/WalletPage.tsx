@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { Coins, ArrowUp, ArrowDown, ArrowsLeftRight } from '@phosphor-icons/react'
+import { ArrowUp, ArrowDown, ArrowsLeftRight } from '@phosphor-icons/react'
 import { api } from '../lib/api'
 import type { Wallet, WalletTxn } from '../types'
 import { WalletBar } from '../components/wallet/WalletBar'
@@ -36,7 +36,7 @@ export function WalletPage() {
       <FadeUp>
         <h1 className="display text-xl">My Wallet</h1>
         <p className="text-sm mt-0.5" style={{ color: 'var(--color-muted)' }}>
-          Coin balance and transaction history. USD deposit balance shown below.
+          Coin balance and transaction history.
         </p>
       </FadeUp>
 
@@ -61,11 +61,10 @@ export function WalletPage() {
       )}
 
       {/* Quick actions */}
-      <FadeUp delay={0.08} className="grid grid-cols-3 gap-3">
+      <FadeUp delay={0.08} className="grid grid-cols-2 gap-3">
         {[
-          { icon: ArrowDown, label: 'Deposit USD',  color: 'var(--color-success)' },
-          { icon: Coins,     label: 'Buy Coins',  color: 'var(--color-xu)' },
-          { icon: ArrowUp,   label: 'Withdraw',     color: 'var(--color-muted)' },
+          { icon: ArrowDown, label: 'Deposit USD', color: 'var(--color-success)' },
+          { icon: ArrowUp,   label: 'Withdraw',   color: 'var(--color-muted)' },
         ].map(({ icon: Icon, label, color }) => (
           <button
             key={label}
