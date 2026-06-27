@@ -350,7 +350,7 @@ export function EarnPage() {
                     </div>
                 }
                 <div className="min-w-0">
-                  <p className="font-semibold text-sm truncate">{ch.channel_name ?? ch.channel_id}</p>
+                  <p className="font-semibold text-sm truncate" style={{ color: 'var(--color-text)' }}>{ch.channel_name ?? ch.channel_id}</p>
                   <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--color-muted)' }}>
                     {ch.channel_id}
                   </p>
@@ -408,7 +408,7 @@ function TaskInfo({ task }: { task: Task }) {
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <p className="font-bold text-base truncate">{task.video_title ?? task.channel_name ?? 'YouTube Video'}</p>
+          <p className="font-bold text-base truncate" style={{ color: 'var(--color-text)' }}>{task.video_title ?? task.channel_name ?? 'YouTube Video'}</p>
           <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
             {at === 'LIKE' ? 'Like this video' : 'Post a comment'}
           </p>
@@ -433,7 +433,7 @@ function TaskInfo({ task }: { task: Task }) {
           </div>
       }
       <div className="min-w-0">
-        <p className="font-bold text-base truncate">{task.channel_name ?? 'YouTube Channel'}</p>
+        <p className="font-bold text-base truncate" style={{ color: 'var(--color-text)' }}>{task.channel_name ?? 'YouTube Channel'}</p>
       </div>
     </div>
   )
