@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { Env } from '../bindings'
 import type { HonoVariables } from '../types'
 import { requireAuth } from '../middleware/auth'
+import { resolveChannelId, getChannelStats } from '../lib/youtube'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -107,6 +108,27 @@ taskRoutes.get('/random', async (c) => {
 
   if (!task) return c.json({ task: null })
   return c.json({ task })
+})
+
+// GET /api/tasks/channel-lookup?url=<youtube channel url or handle>
+// Requires auth — resolves channel URL to ID and fetches stats
+taskRoutes.get('/channel-lookup', async (c) => {
+  const guard = requireAuth(c)
+  if (guard) return guard
+
+  const url = c.req.query('url')
+  if (!url || !c.env.YOUTUBE_API_KEY) {
+    return c.json({ error: 'MISSING_URL', message: 'url query param required' }, 400)
+  }
+  const channelId = await resolveChannelId(url, c.env.YOUTUBE_API_KEY)
+  if (!channelId) {
+    return c.json({ error: 'CHANNEL_NOT_FOUND', message: 'Could not resolve channel URL' }, 404)
+  }
+  const stats = await getChannelStats(channelId, c.env.YOUTUBE_API_KEY)
+  if (!stats) {
+    return c.json({ error: 'CHANNEL_NOT_FOUND', message: 'Channel not found' }, 404)
+  }
+  return c.json({ channel: stats })
 })
 
 // GET /api/tasks/:id — task detail

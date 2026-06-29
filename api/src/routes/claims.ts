@@ -171,8 +171,7 @@ claimRoutes.post('/:claimId/submit', async (c) => {
 
   return c.json({
     ok: true,
-    verify_url: `/api/auth/youtube-verify?claim_id=${claimId}`,
-    message: 'Submitted. Proceed to YouTube verification.',
+    message: 'Submitted.',
   })
 })
 

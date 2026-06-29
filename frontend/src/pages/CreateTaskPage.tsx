@@ -1,18 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { YoutubeLogo, Info, Warning, ArrowRight, ThumbsUp, ChatCircle } from '@phosphor-icons/react'
-import { useNavigate, Link } from 'react-router-dom'
+import { YoutubeLogo, Info, Warning, ThumbsUp, ChatCircle, CheckCircle } from '@phosphor-icons/react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { FadeUp } from '../components/ui/Motion'
 
 type ActionType = 'SUBSCRIBE' | 'LIKE' | 'COMMENT'
-
-interface Channel {
-  channel_id: string
-  channel_name: string
-  channel_avatar: string | null
-  channel_url: string
-}
 
 interface Pricing {
   coin_per_subscribe?: number
@@ -51,34 +44,31 @@ export function CreateTaskPage() {
   const qc = useQueryClient()
 
   const [actionType, setActionType] = useState<ActionType>('SUBSCRIBE')
-  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null)
   const [targetCount, setTargetCount] = useState(10)
   const [deadlineDays, setDeadlineDays] = useState(7)
   const [videoUrl, setVideoUrl] = useState('')
   const [videoTitle, setVideoTitle] = useState('')
   const [commentTemplate, setCommentTemplate] = useState('')
 
+  // Channel lookup state (for SUBSCRIBE)
+  const [channelUrl, setChannelUrl] = useState('')
+  const [channelLookupResult, setChannelLookupResult] = useState<{ id: string; title: string; subscriberCount: number } | null>(null)
+  const [channelLookupError, setChannelLookupError] = useState('')
+  const [lookingUp, setLookingUp] = useState(false)
+
   const videoId = extractVideoId(videoUrl)
 
-  const { data: channelsData, isLoading: channelsLoading } = useQuery({
-    queryKey: ['my-channels'],
-    queryFn: () => api.get<{ channels: Channel[] }>('/tasks/my-channels'),
-  })
+  // FIX8: Clear channel lookup state when switching action tabs
+  useEffect(() => {
+    setChannelLookupResult(null)
+    setChannelLookupError('')
+    setChannelUrl('')
+  }, [actionType])
 
   const { data: pricing } = useQuery({
     queryKey: ['task-pricing'],
     queryFn: () => api.get<Pricing>('/tasks/pricing'),
   })
-
-  const channels = channelsData?.channels ?? []
-  const selectedChannel = channels.find(ch => ch.channel_id === selectedChannelId) ?? channels[0] ?? null
-
-  // Auto-select first channel (in effect, not render body)
-  useEffect(() => {
-    if (channels.length > 0 && !selectedChannelId) {
-      setSelectedChannelId(channels[0].channel_id)
-    }
-  }, [channels, selectedChannelId])
 
   // Pricing display per action type (coin only)
   const getPricingDisplay = () => {
@@ -94,6 +84,21 @@ export function CreateTaskPage() {
 
   const totalCost = (typeof pricePerUnit === 'number' ? pricePerUnit : 0) * targetCount
 
+  async function lookupChannel() {
+    if (!channelUrl.trim()) return
+    setLookingUp(true)
+    setChannelLookupError('')
+    setChannelLookupResult(null)
+    try {
+      const res = await api.get<{ channel: { id: string; title: string; subscriberCount: number } }>(`/tasks/channel-lookup?url=${encodeURIComponent(channelUrl)}`)
+      setChannelLookupResult(res.channel)
+    } catch (err: any) {
+      setChannelLookupError(err?.message ?? 'Channel not found')
+    } finally {
+      setLookingUp(false)
+    }
+  }
+
   const mutation = useMutation({
     mutationFn: (body: CreateTaskBody) => api.post<{ task_id: string }>('/tasks', body),
     onSuccess: () => {
@@ -104,7 +109,7 @@ export function CreateTaskPage() {
 
   const isSubmitDisabled = () => {
     if (mutation.isPending) return true
-    if (actionType === 'SUBSCRIBE') return channels.length === 0 || !selectedChannel
+    if (actionType === 'SUBSCRIBE') return !channelLookupResult
     if (actionType === 'LIKE') return !videoId
     if (actionType === 'COMMENT') return !videoId || !commentTemplate.trim()
     return false
@@ -114,12 +119,11 @@ export function CreateTaskPage() {
     e.preventDefault()
 
     if (actionType === 'SUBSCRIBE') {
-      if (!selectedChannel) return
+      if (!channelLookupResult) return
       mutation.mutate({
-        channel_url: selectedChannel.channel_url,
-        channel_id: selectedChannel.channel_id,
-        channel_name: selectedChannel.channel_name,
-        channel_avatar: selectedChannel.channel_avatar ?? undefined,
+        channel_url: `https://www.youtube.com/channel/${channelLookupResult.id}`,
+        channel_id: channelLookupResult.id,
+        channel_name: channelLookupResult.title,
         target_count: targetCount,
         deadline_days: deadlineDays,
         action_type: 'SUBSCRIBE',
@@ -199,50 +203,59 @@ export function CreateTaskPage() {
       <FadeUp delay={0.1}>
         <form onSubmit={handleSubmit} className="card p-5 flex flex-col gap-4">
 
-          {/* SUBSCRIBE: Channel selector */}
+          {/* SUBSCRIBE: Channel URL lookup */}
           {actionType === 'SUBSCRIBE' && (
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium">YouTube Channel</label>
-              {channelsLoading ? (
-                <div className="h-14 rounded animate-pulse" style={{ background: 'var(--color-elevated)' }} />
-              ) : channels.length === 0 ? (
-                <div className="flex items-center gap-3 p-3 rounded-md border" style={{ borderColor: 'var(--color-danger)', background: 'rgb(239 68 68 / 0.06)' }}>
-                  <Warning size={18} color="var(--color-danger)" />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium" style={{ color: 'var(--color-danger)' }}>No YouTube channel linked</p>
-                    <p className="text-xs" style={{ color: 'var(--color-muted)' }}>Link a channel in your profile first.</p>
+              <div className="flex gap-2">
+                <input
+                  className="input flex-1"
+                  placeholder="YouTube channel URL or @handle"
+                  value={channelUrl}
+                  onChange={(e) => {
+                    setChannelUrl(e.target.value)
+                    setChannelLookupResult(null)
+                    setChannelLookupError('')
+                  }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); lookupChannel() } }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-ghost text-sm"
+                  onClick={lookupChannel}
+                  disabled={lookingUp || !channelUrl.trim()}
+                >
+                  {lookingUp ? 'Looking up…' : 'Look up'}
+                </button>
+              </div>
+
+              {channelLookupResult && (
+                <div
+                  className="flex items-center gap-3 p-3 rounded-md border"
+                  style={{ borderColor: 'var(--color-success)', background: 'rgb(34 197 94 / 0.06)' }}
+                >
+                  <CheckCircle size={18} color="var(--color-success)" weight="fill" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{channelLookupResult.title}</p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                      {channelLookupResult.subscriberCount.toLocaleString()} subscribers
+                    </p>
                   </div>
-                  <Link to="/profile" className="btn btn-ghost text-xs flex items-center gap-1">
-                    Profile <ArrowRight size={12} />
-                  </Link>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {channels.map(ch => (
-                    <button
-                      key={ch.channel_id}
-                      type="button"
-                      onClick={() => setSelectedChannelId(ch.channel_id)}
-                      className="flex items-center gap-3 p-3 rounded-md border text-left transition-all"
-                      style={{
-                        borderColor: selectedChannelId === ch.channel_id ? 'var(--color-orange)' : 'var(--color-border)',
-                        background: selectedChannelId === ch.channel_id ? 'var(--color-elevated)' : 'transparent',
-                      }}
-                    >
-                      {ch.channel_avatar
-                        ? <img src={ch.channel_avatar} alt="" className="w-9 h-9 rounded-full" />
-                        : <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: 'var(--color-elevated)' }}>
-                            <YoutubeLogo size={18} color="var(--color-sub)" weight="fill" />
-                          </div>
-                      }
-                      <div>
-                        <p className="text-sm font-medium">{ch.channel_name}</p>
-                        <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{ch.channel_id}</p>
-                      </div>
-                    </button>
-                  ))}
+                  <span className="text-xs font-medium" style={{ color: 'var(--color-success)' }}>✓ Verified</span>
                 </div>
               )}
+
+              {channelLookupError && (
+                <div className="flex items-center gap-2 p-3 rounded-md border"
+                  style={{ borderColor: 'var(--color-danger)', background: 'rgb(239 68 68 / 0.06)' }}>
+                  <Warning size={16} color="var(--color-danger)" />
+                  <p className="text-sm" style={{ color: 'var(--color-danger)' }}>{channelLookupError}</p>
+                </div>
+              )}
+
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>
+                Enter a channel URL like <code>https://youtube.com/@handle</code> or <code>https://youtube.com/channel/UC...</code>
+              </p>
             </div>
           )}
 
@@ -390,16 +403,6 @@ export function CreateTaskPage() {
               )}
             </div>
           </div>
-        </FadeUp>
-      )}
-
-      {/* Missing channel warning for SUBSCRIBE */}
-      {actionType === 'SUBSCRIBE' && channels.length === 0 && !channelsLoading && (
-        <FadeUp delay={0.12}>
-          <p className="text-xs text-center" style={{ color: 'var(--color-muted)' }}>
-            You need a linked YouTube channel to create subscribe tasks.{' '}
-            <Link to="/profile" style={{ color: 'var(--color-link)' }}>Link now →</Link>
-          </p>
         </FadeUp>
       )}
     </div>

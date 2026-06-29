@@ -126,23 +126,6 @@ export async function getMyChannelId(accessToken: string): Promise<string | null
   return data.items?.[0]?.id ?? null
 }
 
-// Like a video on behalf of earner
-export async function likeVideo(
-  accessToken: string,
-  videoId: string
-): Promise<{ ok: boolean; error?: string }> {
-  const url = new URL('https://www.googleapis.com/youtube/v3/videos/rate')
-  url.searchParams.set('id', videoId)
-  url.searchParams.set('rating', 'like')
-  const res = await fetch(url.toString(), {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${accessToken}` },
-  })
-  if (res.status === 204 || res.ok) return { ok: true }
-  const data = await res.json<{ error?: { message?: string } }>()
-  return { ok: false, error: data.error?.message ?? `HTTP ${res.status}` }
-}
-
 // Verify earner has liked a video
 export async function verifyLike(
   accessToken: string,
@@ -156,38 +139,6 @@ export async function verifyLike(
   if (!res.ok) return false
   const data = await res.json<{ items?: Array<{ videoId: string; rating: string }> }>()
   return data.items?.[0]?.rating === 'like'
-}
-
-// Post a comment on a video
-export async function postComment(
-  accessToken: string,
-  videoId: string,
-  text: string
-): Promise<{ ok: boolean; comment_id?: string; error?: string }> {
-  const res = await fetch('https://www.googleapis.com/youtube/v3/commentThreads?part=snippet', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      snippet: {
-        videoId,
-        topLevelComment: {
-          snippet: { textOriginal: text },
-        },
-      },
-    }),
-  })
-  if (!res.ok) {
-    const data = await res.json<{ error?: { message?: string } }>()
-    return { ok: false, error: data.error?.message ?? `HTTP ${res.status}` }
-  }
-  const data = await res.json<{ id?: string }>()
-  if (data.id !== undefined) {
-    return { ok: true, comment_id: data.id }
-  }
-  return { ok: true }
 }
 
 // Verify a comment exists by ID
@@ -207,42 +158,40 @@ export async function verifyComment(
   return (data.pageInfo?.totalResults ?? 0) > 0
 }
 
-// Subscribe earner's channel to a target channel via stored access token
-export async function subscribeToChannel(
-  accessToken: string,
-  targetChannelId: string
-): Promise<{ ok: boolean; error?: string }> {
-  const res = await fetch('https://www.googleapis.com/youtube/v3/subscriptions?part=snippet', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      snippet: {
-        resourceId: {
-          kind: 'youtube#channel',
-          channelId: targetChannelId,
-        },
-      },
-    }),
-  })
+// Verify a comment exists on a video by the earner's channel
+// Uses public API key (no OAuth needed for comments)
+export async function verifyCommentByAuthor(
+  videoId: string,
+  earnerChannelId: string,
+  apiKey: string
+): Promise<boolean> {
+  let pageToken: string | undefined = undefined
+  let pages = 0
+  const MAX_PAGES = 5 // max 500 comments checked
 
-  if (res.status === 409) {
-    // Already subscribed — treat as success
-    return { ok: true }
-  }
+  do {
+    const url = new URL('https://www.googleapis.com/youtube/v3/commentThreads')
+    url.searchParams.set('part', 'snippet')
+    url.searchParams.set('videoId', videoId)
+    url.searchParams.set('maxResults', '100')
+    url.searchParams.set('key', apiKey)
+    if (pageToken) url.searchParams.set('pageToken', pageToken)
 
-  if (!res.ok) {
-    const data = await res.json<{ error?: { message?: string; errors?: Array<{ reason?: string }> } }>()
-    const reason = data.error?.errors?.[0]?.reason ?? ''
-    const msg = data.error?.message ?? `HTTP ${res.status}`
-    // subscriptionForbidden = trying to sub own channel
-    if (reason === 'subscriptionForbidden') {
-      return { ok: false, error: 'Cannot subscribe to your own channel' }
-    }
-    return { ok: false, error: msg }
-  }
+    const res = await fetch(url.toString())
+    if (!res.ok) return false
 
-  return { ok: true }
+    const data = await res.json<{
+      items?: Array<{ snippet: { topLevelComment: { snippet: { authorChannelId: { value: string } } } } }>
+      nextPageToken?: string
+    }>()
+
+    if ((data.items ?? []).some(
+      item => item.snippet.topLevelComment.snippet.authorChannelId.value === earnerChannelId
+    )) return true
+
+    pageToken = data.nextPageToken
+    pages++
+  } while (pageToken && pages < MAX_PAGES)
+
+  return false
 }
