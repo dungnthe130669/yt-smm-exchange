@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { YoutubeLogo, CheckCircle, ArrowRight, Confetti, Warning, ThumbsUp, ChatCircle, Clock } from '@phosphor-icons/react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { YoutubeLogo, CheckCircle, ArrowRight, Confetti, Warning, ThumbsUp, ChatCircle, Clock, Spinner, Info } from '@phosphor-icons/react'
 import { api } from '../lib/api'
 import { FadeUp } from '../components/ui/Motion'
 
@@ -28,7 +28,7 @@ interface LinkedChannel {
   channel_avatar: string | null
 }
 
-type EarnState = 'idle' | 'performing' | 'success' | 'error'
+type EarnState = 'idle' | 'popup_open' | 'verifying' | 'retrying' | 'success' | 'error' | 'pending_comment'
 
 const ACTION_BADGE_STYLE: Record<string, { label: string; bg: string; color: string }> = {
   SUBSCRIBE: { label: 'SUBSCRIBE', bg: 'rgb(249 115 22 / 0.15)', color: 'var(--color-orange)' },
@@ -39,8 +39,10 @@ const ACTION_BADGE_STYLE: Record<string, { label: string; bg: string; color: str
 export function EarnPage() {
   const qc = useQueryClient()
   const [earnState, setEarnState] = useState<EarnState>('idle')
-  const [xuEarned, setXuEarned] = useState(0)
+  const [coinsEarned, setCoinsEarned] = useState(0)
   const [errorMsg, setErrorMsg] = useState('')
+  const [countdown, setCountdown] = useState(0)
+  const [retryCount, setRetryCount] = useState(0)
   const [taskSeed, setTaskSeed] = useState(0)
   const [actionFilter, setActionFilter] = useState<string>('')
   const [showChannelPicker, setShowChannelPicker] = useState(false)
@@ -69,13 +71,6 @@ export function EarnPage() {
 
   const getActionType = () => task?.action_type ?? 'SUBSCRIBE'
 
-  const getPerformingLabel = () => {
-    const at = getActionType()
-    if (at === 'LIKE') return 'Liking…'
-    if (at === 'COMMENT') return 'Posting comment…'
-    return 'Subscribing…'
-  }
-
   const getCtaLabel = () => {
     const at = getActionType()
     if (at === 'LIKE') return 'Like & Earn'
@@ -90,57 +85,141 @@ export function EarnPage() {
     return <YoutubeLogo size={18} weight="fill" />
   }
 
-  const getSuccessLabel = () => {
-    const at = getActionType()
-    if (at === 'LIKE') return 'Liked!'
-    if (at === 'COMMENT') return 'Comment posted!'
-    return 'Subscribed!'
-  }
+  async function handleEarn(channelId: string | null) {
+    if (!task) return
+    const resolvedChannelId = channelId ?? channels[0]?.channel_id ?? null
+    if (!resolvedChannelId) return
 
-  const earnMutation = useMutation({
-    mutationFn: async (channelId: string | null) => {
-      if (!task) throw new Error('No task')
-      setEarnState('performing')
+    setSelectedChannelId(resolvedChannelId)
+    setEarnState('idle')
+    setErrorMsg('')
+    setRetryCount(0)
 
-      // Step 1: claim task
-      const claimRes = await api.post<{ claim_id: string }>(`/claims/${task.id}/claim`, {})
-
-      // Step 2: perform action + verify (claim → VERIFIED in one shot)
-      try {
-        const verifyRes = await api.post<{ ok: boolean; coins_earned: number }>(
-          `/youtube-verify/${claimRes.claim_id}/perform`,
-          { channel_id: channelId }
-        )
-        return verifyRes
-      } catch (err) {
-        // Auto-expire the stuck claim so concurrent limit isn't hit next time
-        try { await api.delete(`/claims/${claimRes.claim_id}`) } catch { /* ignore */ }
-        throw err
-      }
-    },
-    onSuccess: (res) => {
-      setXuEarned(res.coins_earned ?? 0)
-      setEarnState('success')
-      qc.invalidateQueries({ queryKey: ['wallet'] })
-      qc.invalidateQueries({ queryKey: ['my-tasks'] })
-    },
-    onError: (err: unknown) => {
-      const e = err as { message?: string; error?: string }
-      setErrorMsg(e.message ?? 'Something went wrong. Try again.')
+    // 1. Claim the task
+    let claimId: string
+    try {
+      const claimRes = await api.post<{ claim_id: string }>(`/claims/${task.id}/claim`, { channel_id: resolvedChannelId })
+      claimId = claimRes.claim_id
+    } catch (err: any) {
       setEarnState('error')
-      qc.invalidateQueries({ queryKey: ['my-tasks'] })
-    },
-  })
+      setErrorMsg(err?.message ?? 'Failed to claim task')
+      return
+    }
+
+    // 2. Build YouTube URL
+    const actionType = task.action_type ?? 'SUBSCRIBE'
+    let ytUrl: string
+    if (actionType === 'SUBSCRIBE') {
+      ytUrl = task.channel_url || `https://www.youtube.com/channel/${task.channel_id}`
+    } else {
+      ytUrl = `https://www.youtube.com/watch?v=${task.video_id}`
+    }
+
+    // 3. Open popup
+    const popup = window.open(ytUrl, 'yt_action_popup', 'width=900,height=650,scrollbars=yes,resizable=yes')
+
+    // FIX5: Handle blocked popup
+    if (!popup) {
+      setEarnState('error')
+      setErrorMsg('Popup was blocked. Please allow popups for this site, or open YouTube manually and come back.')
+      try { await api.delete(`/claims/${claimId}`) } catch { /* ignore */ }
+      return
+    }
+
+    setEarnState('popup_open')
+
+    // 4. Countdown 60s + poll popup.closed
+    const TIMEOUT_SEC = 60
+    setCountdown(TIMEOUT_SEC)
+
+    // FIX5: Store intervalId so it's always cleared (no leak)
+    let intervalId: ReturnType<typeof setInterval>
+    await new Promise<void>((resolve) => {
+      let remaining = TIMEOUT_SEC
+      intervalId = setInterval(() => {
+        remaining -= 1
+        setCountdown(remaining)
+        if (remaining <= 0 || popup.closed) {
+          clearInterval(intervalId)
+          if (!popup.closed) popup.close()
+          resolve()
+        }
+      }, 1000)
+    })
+
+    // 5. Verify (with retry for SUBSCRIBE)
+    setEarnState('verifying')
+    const MAX_RETRIES = 3
+    const RETRY_DELAY_MS = 15_000
+
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        let res: any
+        if (actionType === 'COMMENT') {
+          res = await api.post(`/youtube-verify/${claimId}/comment-verify`, { channel_id: resolvedChannelId })
+        } else {
+          res = await api.post(`/youtube-verify/${claimId}`, { channel_id: resolvedChannelId })
+        }
+
+        if (res.pending) {
+          // COMMENT pending — background verify
+          setEarnState('pending_comment')
+          qc.invalidateQueries({ queryKey: ['yt-link-status'] })
+          setTimeout(() => { setEarnState('idle'); setTaskSeed(s => s + 1) }, 4000)
+          return
+        }
+
+        // FIX1: Server returns 200 with retry:true (not 202) — check here, not in catch
+        if (res.retry === true) {
+          if (attempt < MAX_RETRIES - 1) {
+            setEarnState('retrying')
+            setRetryCount(attempt + 1)
+            await new Promise(r => setTimeout(r, RETRY_DELAY_MS))
+            setEarnState('verifying')
+            continue
+          }
+          // Max retries exceeded
+          try { await api.delete(`/claims/${claimId}`) } catch { /* ignore */ }
+          setEarnState('error')
+          setErrorMsg('Subscription not detected after 3 attempts. Please try again.')
+          return
+        }
+
+        // Success
+        setCoinsEarned(res.coins_earned ?? 0)
+        setEarnState('success')
+        qc.invalidateQueries({ queryKey: ['wallet'] })
+        setTimeout(() => { setEarnState('idle'); setTaskSeed(s => s + 1) }, 3000)
+        return
+
+      } catch (err: any) {
+        // api.ts throws the response body directly — check retry field
+        const isRetryable = err?.retry === true
+        if (isRetryable && attempt < MAX_RETRIES - 1) {
+          setEarnState('retrying')
+          setRetryCount(attempt + 1)
+          await new Promise(r => setTimeout(r, RETRY_DELAY_MS))
+          setEarnState('verifying')
+          continue
+        }
+        // Auto-expire failed claim
+        try { await api.delete(`/claims/${claimId}`) } catch { /* ignore */ }
+        setEarnState('error')
+        setErrorMsg(err?.message ?? 'Verification failed')
+        return
+      }
+    }
+  }
 
   const handleNext = () => {
     setEarnState('idle')
     setErrorMsg('')
-    setXuEarned(0)
+    setCoinsEarned(0)
     setTaskSeed((s) => s + 1)
     qc.invalidateQueries({ queryKey: ['random-task'] })
   }
 
-  const isWorking = earnState === 'performing'
+  const isBusy = earnState === 'popup_open' || earnState === 'verifying' || earnState === 'retrying'
 
   return (
     <div className="flex flex-col gap-6">
@@ -165,7 +244,6 @@ export function EarnPage() {
           ))}
         </div>
       </FadeUp>
-
 
       {!linkedChannel && (
         <FadeUp delay={0.04}>
@@ -196,41 +274,53 @@ export function EarnPage() {
               <Confetti size={32} color="var(--color-success)" weight="fill" />
             </div>
             <div>
-              <p className="font-bold text-lg">{getSuccessLabel()}</p>
+              <p className="font-bold text-lg">Done!</p>
               <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
-                  +<span className="mono font-bold" style={{ color: 'var(--color-xu)' }}>{xuEarned}</span> coins added to your balance
+                +<span className="mono font-bold" style={{ color: 'var(--color-xu)' }}>{coinsEarned}</span> coins added!
               </p>
             </div>
             <button className="btn-primary flex items-center gap-2" onClick={handleNext}>
               Next task <ArrowRight size={16} />
             </button>
           </div>
+        ) : earnState === 'pending_comment' ? (
+          <div className="card p-8 flex flex-col items-center gap-4 text-center">
+            <div className="w-16 h-16 rounded-full flex items-center justify-center" style={{ background: 'rgb(99 102 241 / 0.12)' }}>
+              <Info size={32} color="#818cf8" weight="fill" />
+            </div>
+            <div>
+              <p className="font-bold text-lg">Comment submitted!</p>
+              <p className="text-sm mt-1" style={{ color: 'var(--color-muted)' }}>
+                Coins will be credited after verification.
+              </p>
+            </div>
+          </div>
         ) : earnState === 'error' ? (
-          errorMsg.includes('wait') ? (
-          <div className="card p-6 text-center flex flex-col items-center gap-3">
-            <div className="w-12 h-12 rounded-full flex items-center justify-center"
-              style={{ background: 'var(--color-elevated)' }}>
-              <Clock size={24} color="var(--color-muted)" />
+          errorMsg.toLowerCase().includes('wait') ? (
+            <div className="card p-6 text-center flex flex-col items-center gap-3">
+              <div className="w-12 h-12 rounded-full flex items-center justify-center"
+                style={{ background: 'var(--color-elevated)' }}>
+                <Clock size={24} color="var(--color-muted)" />
+              </div>
+              <p className="font-semibold">Almost there!</p>
+              <p className="text-sm" style={{ color: 'var(--color-muted)' }}>{errorMsg}</p>
+              <button className="btn btn-ghost text-sm" onClick={handleNext}>Refresh</button>
             </div>
-            <p className="font-semibold">Almost there!</p>
-            <p className="text-sm" style={{ color: 'var(--color-muted)' }}>{errorMsg}</p>
-            <button className="btn btn-ghost text-sm" onClick={handleNext}>Refresh</button>
-          </div>
           ) : (
-          <div className="card p-6 flex flex-col gap-4">
-            <TaskInfo task={task} />
-            <div className="rounded-md p-3 text-sm flex items-start gap-2"
-              style={{ background: 'rgb(239 68 68 / 0.08)', borderLeft: '2px solid var(--color-danger)' }}>
-              <Warning size={15} color="var(--color-danger)" style={{ flexShrink: 0, marginTop: 1 }} />
-              <p style={{ color: 'var(--color-danger)' }}>{errorMsg}</p>
+            <div className="card p-6 flex flex-col gap-4">
+              <TaskInfo task={task} />
+              <div className="rounded-md p-3 text-sm flex items-start gap-2"
+                style={{ background: 'rgb(239 68 68 / 0.08)', borderLeft: '2px solid var(--color-danger)' }}>
+                <Warning size={15} color="var(--color-danger)" style={{ flexShrink: 0, marginTop: 1 }} />
+                <p style={{ color: 'var(--color-danger)' }}>{errorMsg}</p>
+              </div>
+              <div className="flex gap-2">
+                <button className="btn-primary text-sm flex-1" onClick={() => { setEarnState('idle'); setErrorMsg('') }} disabled={!linkedChannel}>
+                  Try again
+                </button>
+                <button className="btn btn-ghost text-sm" onClick={handleNext}>Skip</button>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <button className="btn-primary text-sm flex-1" onClick={() => { setEarnState('idle'); setErrorMsg('') }} disabled={!linkedChannel}>
-                Try again
-              </button>
-              <button className="btn btn-ghost text-sm" onClick={handleNext}>Skip</button>
-            </div>
-          </div>
           )
         ) : (
           <div className="card p-6 flex flex-col gap-5">
@@ -260,6 +350,30 @@ export function EarnPage() {
               </div>
             </div>
 
+            {/* Countdown badge when popup open */}
+            {earnState === 'popup_open' && (
+              <div className="flex items-center gap-2 p-3 rounded-md text-sm"
+                style={{ background: 'rgb(249 115 22 / 0.08)', borderLeft: '2px solid var(--color-orange)' }}>
+                <Clock size={15} color="var(--color-orange)" />
+                <span style={{ color: 'var(--color-orange)' }}>
+                  YouTube open — closes in {countdown}s
+                </span>
+              </div>
+            )}
+
+            {/* Verifying / retrying state */}
+            {(earnState === 'verifying' || earnState === 'retrying') && (
+              <div className="flex items-center gap-2 p-3 rounded-md text-sm"
+                style={{ background: 'var(--color-elevated)' }}>
+                <Spinner size={15} className="animate-spin" />
+                <span style={{ color: 'var(--color-muted)' }}>
+                  {earnState === 'retrying'
+                    ? `Not detected yet, retrying… (${retryCount}/3)`
+                    : 'Verifying…'}
+                </span>
+              </div>
+            )}
+
             {/* CTA */}
             <button
               className="btn-primary w-full flex items-center justify-center gap-2 py-3 text-base"
@@ -267,15 +381,15 @@ export function EarnPage() {
                 if (channels.length > 1) {
                   setShowChannelPicker(true)
                 } else {
-                  earnMutation.mutate(channels[0]?.channel_id ?? null)
+                  handleEarn(channels[0]?.channel_id ?? null)
                 }
               }}
-              disabled={isWorking || !linkedChannel}
+              disabled={isBusy || !linkedChannel}
             >
-              {isWorking ? (
+              {isBusy ? (
                 <>
                   <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  {getPerformingLabel()}
+                  {earnState === 'popup_open' ? 'YouTube open…' : earnState === 'retrying' ? 'Retrying…' : 'Verifying…'}
                 </>
               ) : (
                 <>
@@ -374,7 +488,7 @@ export function EarnPage() {
               disabled={!selectedChannelId}
               onClick={() => {
                 setShowChannelPicker(false)
-                earnMutation.mutate(selectedChannelId)
+                handleEarn(selectedChannelId)
               }}
             >
               Use this channel
